@@ -302,6 +302,38 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 .alert-info {
   background: #f0fdfa; border: 1px solid #99f6e4; border-left: 5px solid var(--accent); color: #0f766e;
 }
+.alert-good {
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid var(--good); color: #166534;
+}
+.btn-remove-paper {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 5px 11px;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all .15s ease;
+  user-select: none;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 110px;
+}
+.btn-remove-paper:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+  color: #991b1b;
+  transform: translateY(-1px);
+  box-shadow: 0 1px 3px rgba(185, 28, 28, 0.15);
+}
+.btn-remove-paper:active {
+  transform: translateY(0);
+}
 .alert-title {
   font-size: .95rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px;
 }
@@ -791,12 +823,15 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
         <div>
           <h2 class="sec-h" style="margin:0">Individual Paper Reports</h2>
-          <p class="hint" style="margin:4px 0 0">Each paper is shown with its relevance score, validation status, abstract, and Vancouver reference — one by one.</p>
+          <p class="hint" style="margin:4px 0 0">Each paper is shown with its relevance score, validation status, abstract, and Vancouver reference. You can remove individual papers using the <strong>🗑️ Remove</strong> button before generating the draft.</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <span id="banner-count" style="font-size:.85rem;color:var(--muted)"></span>
         </div>
       </div>
+
+      <!-- Paper removal notice banner with Undo -->
+      <div id="step3-remove-notice" class="alert-box alert-info hidden" style="margin-bottom:14px"></div>
 
       <!-- Partial validation warning banner -->
       <div id="partial-validation-alert" class="alert-box alert-warn hidden"></div>
@@ -1250,6 +1285,9 @@ function resetApp(){
   if(s2box) s2box.classList.add('hidden');
   const valNotice = document.getElementById('partial-validation-alert');
   if(valNotice) valNotice.classList.add('hidden');
+  const remNotice = document.getElementById('step3-remove-notice');
+  if(remNotice) remNotice.classList.add('hidden');
+  lastRemovedPaper = null;
   const s4Alert = document.getElementById('step4-alert');
   if(s4Alert) s4Alert.classList.add('hidden');
   const anim = document.getElementById('proc-anim');
@@ -2202,7 +2240,7 @@ function renderPaperCards(){
   container.innerHTML = '';
 
   if(!p.length){
-    container.innerHTML = `<div class="advisory">⚠️ No papers found for this topic in the selected year range. Try broadening the year range or using different keywords.</div>`;
+    container.innerHTML = `<div class="advisory" style="padding:22px;text-align:center">⚠️ All papers have been removed from the synthesis pool.<br><span style="font-size:.85rem;color:var(--muted)">Use <strong>Undo</strong> above to restore your last paper, or click <strong>New Search</strong> below to start over.</span></div>`;
     return;
   }
 
@@ -2242,11 +2280,14 @@ function renderPaperCards(){
             ${paper.citedBy?'<br>🔖 Cited by '+paper.citedBy+' articles':''}
           </div>
         </div>
-        <!-- Heuristic Relevance score -->
-        <div style="text-align:center;flex-shrink:0;min-width:90px">
+        <!-- Heuristic Relevance score & Actions -->
+        <div style="text-align:center;flex-shrink:0;min-width:105px;display:flex;flex-direction:column;align-items:center">
           <div style="font-size:1.7rem;font-weight:700;color:${relColor};line-height:1">${rel}%</div>
           <div style="font-size:.72rem;color:var(--muted)">heuristic relevance</div>
-          ${link?`<a href="${esc(link)}" target="_blank" style="font-size:.76rem;color:var(--accent);display:block;margin-top:4px">View Source →</a>`:''}
+          ${link?`<a href="${esc(link)}" target="_blank" rel="noopener" style="font-size:.76rem;color:var(--accent);display:inline-block;margin-top:2px">View Source →</a>`:''}
+          <button type="button" class="btn-remove-paper" onclick="removePaper(${i})" title="Remove paper #${i+1} from literature draft">
+            <span>🗑️</span> Remove
+          </button>
         </div>
       </div>
 
@@ -2313,6 +2354,69 @@ function renderPaperCards(){
     `;
     container.appendChild(card);
   });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAPER REMOVAL & RESTORATION (STEP 3)
+// ═══════════════════════════════════════════════════════════════
+let lastRemovedPaper = null;
+
+function removePaper(index){
+  if(index < 0 || !STATE.papers || index >= STATE.papers.length) return;
+  const paper = STATE.papers[index];
+  const val = STATE.validations ? STATE.validations[index] : null;
+  const rel = STATE.relevance ? STATE.relevance[index] : null;
+  const relDet = STATE.relevanceDetails ? STATE.relevanceDetails[index] : null;
+
+  lastRemovedPaper = { paper, val, rel, relDet, index };
+
+  STATE.papers.splice(index, 1);
+  if(Array.isArray(STATE.validations)) STATE.validations.splice(index, 1);
+  if(Array.isArray(STATE.relevance)) STATE.relevance.splice(index, 1);
+  if(Array.isArray(STATE.relevanceDetails)) STATE.relevanceDetails.splice(index, 1);
+
+  renderPaperCards();
+
+  const noticeBox = document.getElementById('step3-remove-notice');
+  if(noticeBox){
+    const titleSnippet = paper.title ? (paper.title.substring(0, 60) + (paper.title.length > 60 ? '…' : '')) : 'Paper';
+    noticeBox.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>🗑️ Removed paper #${index + 1}: <strong>"${esc(titleSnippet)}"</strong> (${STATE.papers.length} paper${STATE.papers.length === 1 ? '' : 's'} remaining).</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" class="alert-btn alert-btn-secondary" onclick="undoRemovePaper()" style="padding:4px 10px;font-size:.76rem;cursor:pointer">↩ Undo</button>
+          <button type="button" class="alert-close" onclick="document.getElementById('step3-remove-notice').classList.add('hidden')">×</button>
+        </div>
+      </div>`;
+    noticeBox.className = 'alert-box alert-info';
+    noticeBox.classList.remove('hidden');
+  }
+}
+
+function undoRemovePaper(){
+  if(!lastRemovedPaper) return;
+  const { paper, val, rel, relDet, index } = lastRemovedPaper;
+  const targetIdx = Math.min(index, STATE.papers.length);
+  STATE.papers.splice(targetIdx, 0, paper);
+  if(Array.isArray(STATE.validations)) STATE.validations.splice(targetIdx, 0, val);
+  if(Array.isArray(STATE.relevance)) STATE.relevance.splice(targetIdx, 0, rel);
+  if(Array.isArray(STATE.relevanceDetails)) STATE.relevanceDetails.splice(targetIdx, 0, relDet);
+  lastRemovedPaper = null;
+
+  renderPaperCards();
+
+  const noticeBox = document.getElementById('step3-remove-notice');
+  if(noticeBox){
+    noticeBox.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span>✔ Paper restored to synthesis pool (${STATE.papers.length} papers total).</span>
+        <button type="button" class="alert-close" onclick="document.getElementById('step3-remove-notice').classList.add('hidden')">×</button>
+      </div>`;
+    noticeBox.className = 'alert-box alert-good';
+    setTimeout(()=>{
+      if(noticeBox && !lastRemovedPaper) noticeBox.classList.add('hidden');
+    }, 3500);
+  }
 }
 
 function getTitleMatch(paper, topic){
@@ -2630,6 +2734,10 @@ function renderRelevanceTab(){
 // GO TO STEP 4
 // ═══════════════════════════════════════════════════════════════
 function goToStep4(){
+  if (!STATE.papers || STATE.papers.length === 0) {
+    alert('At least one paper is required to generate the review draft. Please restore a paper or perform a new search.');
+    return;
+  }
   const s4Alert = document.getElementById('step4-alert');
   if(s4Alert) s4Alert.classList.add('hidden');
   setStep(4);
@@ -3008,6 +3116,9 @@ async function runPipeline(){
     // ── Render Step 3 ──────────────────────────────────────────────
     setProc('Generating individual paper reports…','Almost done…',95);
     await sleep(300);
+    lastRemovedPaper = null;
+    const remNotice = document.getElementById('step3-remove-notice');
+    if(remNotice) remNotice.classList.add('hidden');
     renderPaperCards();
 
     setStep(3);
