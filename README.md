@@ -6,15 +6,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
 [![Live Demo](https://img.shields.io/badge/Demo-scidraft--ai.vercel.app-brightgreen.svg)](https://scidraft-ai.vercel.app)
 [![Europe PMC](https://img.shields.io/badge/API-Europe%20PMC%20REST-0f6b6b.svg)](https://europepmc.org)
+[![Semantic Scholar](https://img.shields.io/badge/API-Semantic%20Scholar%20Graph-6d28d9.svg)](https://www.semanticscholar.org)
 [![Citation Style](https://img.shields.io/badge/Citations-Vancouver%20%2F%20ICMJE-2e7d32.svg)](https://www.nlm.nih.gov/bsd/uniform_requirements.html)
-[![Zero API Key](https://img.shields.io/badge/Authentication-Zero%20API%20Key-blue.svg)](#)
+[![Dual Engine](https://img.shields.io/badge/Search-Europe%20PMC%20+%20Semantic%20Scholar-0284c7.svg)](#)
 [![Zero Dependencies](https://img.shields.io/badge/Frontend-Vanilla%20JS%20%2F%20Single--File-emerald.svg)](#)
 
 ---
 
 ## 🌟 Highlights
 
-- **100% Free & Unauthenticated**: Uses the open Europe PMC REST API (EMBL-EBI). Zero API keys, logins, or tokens required.
+- **Dual Search Engine Integration**: Concurrently queries both **Europe PMC** (EMBL-EBI) and the **Semantic Scholar Academic Graph** (Allen Institute for AI) with native S2 API key support (`x-api-key`).
+- **Unified Single-Container Workflow**: Automatically unifies cross-engine results, eliminating duplicates by DOI, PMID, and normalized title while merging rich abstracts and direct PDF links.
+- **Source Transparency Badges**: Every paper card and reference citation clearly indicates its origin: `🇪🇺 Europe PMC`, `🎓 Semantic Scholar`, or `🌐 Europe PMC + Semantic Scholar` (cross-verified).
 - **Single-File Zero-Download Architecture**: Fully self-contained client-side application (`index.html`) ready to run in any modern web browser.
 - **Vancouver Citation Compliance**: Strict adherence to National Library of Medicine (NLM) and ICMJE standards with automatic in-text numeric citation linking (`[1]`, `[2]`).
 - **High-Throughput Batched Validation**: Parallel reference verification in batches of 5 with exponential backoff retry and in-memory caching (`⚡`).
@@ -28,16 +31,21 @@
 
 ```mermaid
 flowchart TD
-    A["Step 1: Configuration<br/>• Research Topic<br/>• Year Range Filter (1-20y or All Time)<br/>• Paper Count (10-40)"] --> B["Step 2: Retrieval & Validation<br/>• Europe PMC REST Query<br/>• Multi-Tier Deduplication (PMID/DOI/Title)<br/>• Parallel Batched Validation (5 at a time)<br/>• Caching & Exponential Backoff"]
-    B --> C["Step 3: Diagnostic Analysis<br/>• Staged Heuristic Relevance (0-100%)<br/>• Study-Design Classifier (RCT, Meta, Cohort)<br/>• Open Access & Full-Text Availability<br/>• Automated Manual Verification Warnings"]
-    C --> D["Step 4: Synthesis & Export<br/>• Full IMRaD Manuscript Generation<br/>• Vancouver Citation Formatting<br/>• Download Review Draft PDF<br/>• Download References & Verification PDF"]
+    A["Step 1: Configuration<br/>• Research Topic<br/>• Search Engines (Dual / EPMC / S2)<br/>• S2 API Key Settings<br/>• Year Range & Paper Count"] --> B["Step 2: Dual Retrieval & Validation<br/>• Concurrent Europe PMC + S2 Graph Queries<br/>• Cross-Engine Deduplication & Record Merging<br/>• Parallel Batched Validation (5 at a time)<br/>• In-Memory Caching & Exponential Backoff"]
+    B --> C["Step 3: Diagnostic Analysis<br/>• Unified Container with Source Badges<br/>• Staged Heuristic Relevance (0-100%)<br/>• Study-Design Classifier (RCT, Meta, Cohort)<br/>• Open Access & Direct PDF Links<br/>• Automated Manual Verification Warnings"]
+    C --> D["Step 4: Synthesis & Export<br/>• Full IMRaD Manuscript Generation<br/>• Vancouver Citation Formatting with Source Badges<br/>• Download Review Draft PDF<br/>• Download References & Verification PDF"]
 ```
 
 ---
 
 ## ✨ Features
 
-### 1. 🔍 Europe PMC API Integration & Deduplication
+### 1. 🌐 Dual-Engine Search & Cross-Database Deduplication
+- **Concurrent Querying**: Dispatches search queries to both Europe PMC and Semantic Scholar APIs in parallel.
+- **Cross-Engine Entity Resolution**: Resolves records matching across registered DOIs, PubMed IDs, Semantic Scholar corpus IDs, and normalized titles.
+- **Merged Representation**: Preserves the most comprehensive abstract, merges citation metrics, and flags cross-verified articles with `🌐 Europe PMC + Semantic Scholar`.
+- **Flexible Engine Toggles**: Switch between **Dual Engine (Recommended)**, **Europe PMC Only**, or **Semantic Scholar Only** at will.
+- **Built-In S2 API Key Management**: Pre-configured with dedicated Semantic Scholar credentials, customizable via an in-app settings panel with real-time connectivity testing.
 - Direct querying of millions of biomedical and life sciences records indexed in Europe PMC (MEDLINE, PubMed Central, and preprint repositories).
 - Multi-tier deduplication engine eliminates duplicate records using PMID, registered DOI, or normalized alphanumeric title fingerprints.
 

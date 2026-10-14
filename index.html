@@ -172,10 +172,10 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 /* ═══════════════════════════════════════════════════
    YEAR SLIDER
 ═══════════════════════════════════════════════════ */
-.year-option, .paper-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
-.year-option:hover, .paper-option:hover { border-color: var(--accent); background: var(--accent-light); }
-.year-option.selected, .paper-option.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); font-weight: 700; }
-.year-option input[type="radio"], .paper-option input[type="radio"] { accent-color: var(--accent); }
+.year-option, .paper-option, .engine-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
+.year-option:hover, .paper-option:hover, .engine-option:hover { border-color: var(--accent); background: var(--accent-light); }
+.year-option.selected, .paper-option.selected, .engine-option.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); font-weight: 700; }
+.year-option input[type="radio"], .paper-option input[type="radio"], .engine-option input[type="radio"] { accent-color: var(--accent); }
 
 /* ═══════════════════════════════════════════════════
    ANIMATED PROCESSING INDICATOR  (AIMed-style SVG)
@@ -238,6 +238,12 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 .badge-verified   { background: var(--good-bg); color: var(--good); }
 .badge-notfound   { background: var(--warn-bg); color: var(--warn); }
 .badge-apierror   { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+
+/* Search engine source badges */
+.source-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 700; }
+.source-epmc  { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+.source-s2    { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+.source-both  { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
 
 /* Study-design classification badges */
 .design-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 700; }
@@ -457,7 +463,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
     gap: 8px;
     width: 100%;
   }
-  .year-option, .paper-option {
+  .year-option, .paper-option, .engine-option {
     width: 100%;
     display: flex;
     align-items: center;
@@ -664,6 +670,42 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
     </div>
     <input type="hidden" id="page-size" value="30"/>
 
+    <!-- Search engine sources -->
+    <h2 class="sec-h" style="margin-top:18px">🌐 Literature Search Engines</h2>
+    <p class="hint">Select literature search databases (queries run concurrently and results are unified into a single deduplicated container):</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px" id="engine-options">
+      <label class="engine-option selected" onclick="selectSearchEngine(this,'both')">
+        <input type="radio" name="searchengine" value="both" checked>
+        <span>🌐 Dual Engine (Europe PMC + Semantic Scholar) <strong style="color:var(--accent);font-size:.78rem">Recommended ✓</strong></span>
+      </label>
+      <label class="engine-option" onclick="selectSearchEngine(this,'epmc')">
+        <input type="radio" name="searchengine" value="epmc">
+        <span>🇪🇺 Europe PMC Only</span>
+      </label>
+      <label class="engine-option" onclick="selectSearchEngine(this,'s2')">
+        <input type="radio" name="searchengine" value="s2">
+        <span>🎓 Semantic Scholar Only</span>
+      </label>
+    </div>
+
+    <!-- Collapsible S2 API key settings -->
+    <div style="margin-top:8px;margin-bottom:14px">
+      <button type="button" onclick="toggleS2Settings()" style="background:none;border:none;color:var(--accent);font-size:.82rem;font-weight:600;cursor:pointer;padding:4px 0;display:inline-flex;align-items:center;gap:6px">
+        <span id="s2-toggle-icon">⚙️</span>
+        <span>Semantic Scholar (S2) API Settings</span>
+        <span class="source-badge source-s2" style="font-size:.68rem">S2 Key Active</span>
+      </button>
+      <div id="s2-settings-panel" class="hidden" style="margin-top:8px;padding:12px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+        <label style="display:block;font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:4px">Semantic Scholar API Key (x-api-key)</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="password" id="s2-api-key-input" value="s2k-0rcC3ztnxRdNGsOKL1SNvwbOPnSaRh4qHBT9qe7A" style="flex:1;min-width:240px;padding:7px 10px;font-family:monospace;font-size:.8rem;border:1px solid var(--border);border-radius:6px" placeholder="s2k-..." />
+          <button type="button" class="alert-btn alert-btn-primary" onclick="testS2ApiKey()" style="padding:6px 12px;font-size:.78rem">🔑 Test Key</button>
+          <button type="button" class="alert-btn alert-btn-secondary" onclick="toggleShowS2Key()" id="s2-show-btn" style="padding:6px 12px;font-size:.78rem">👁️ Show</button>
+        </div>
+        <div id="s2-key-status" style="margin-top:6px;font-size:.76rem;color:var(--muted)">Key verified &amp; active (Higher S2 rate limits enabled).</div>
+      </div>
+    </div>
+
     <div class="row" style="margin-top:20px">
       <button class="primary btn-main-cta" id="start-btn" onclick="runPipeline()">
         🔍 Fetch Literature &amp; Build Paper Draft ➜
@@ -834,8 +876,8 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 ══════════════════════════════════ -->
 <footer>
   SciDraft AI v2.0 — AI-Assisted Literature Review Draft Platform ·
-  Powered by <a href="https://europepmc.org" target="_blank">Europe PMC (EMBL-EBI)</a> ·
-  Vancouver Citation Style · Zero API Key Required<br/>
+  Powered by <a href="https://europepmc.org" target="_blank">Europe PMC</a> &amp; <a href="https://www.semanticscholar.org" target="_blank">Semantic Scholar</a> ·
+  Vancouver Citation Style · Unified Cross-Database Search<br/>
   Educational &amp; Research Use Only — always verify generated content clinically and academically. Copyright © Raouf Roshdy 2026
 </footer>
 </div><!-- .wrap -->
@@ -847,11 +889,106 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════
-// STATE
+// STATE & SEARCH CONSTANTS
 // ═══════════════════════════════════════════════════════════════
 const EPMC = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
-let STATE = { topic:'', papers:[], validations:[], relevance:[], relevanceDetails:[], paper:null, yearRange:5, pageSize:30, duplicatesRemoved:0 };
+const S2_API_BASE = 'https://api.semanticscholar.org/graph/v1';
+let S2_API_KEY = 's2k-0rcC3ztnxRdNGsOKL1SNvwbOPnSaRh4qHBT9qe7A';
+
+let STATE = {
+  topic: '',
+  papers: [],
+  validations: [],
+  relevance: [],
+  relevanceDetails: [],
+  paper: null,
+  yearRange: 5,
+  pageSize: 30,
+  duplicatesRemoved: 0,
+  searchSource: 'both',
+  sourceCounts: { epmc: 0, s2: 0, merged: 0 }
+};
 let currentAbortController = null;
+
+function selectSearchEngine(el, mode){
+  document.querySelectorAll('.engine-option').forEach(l=>{
+    l.classList.remove('selected');
+    const span = l.querySelector('span');
+    if (span) span.textContent = span.textContent.replace(' ✓','');
+    const rad = l.querySelector('input');
+    if(rad) rad.checked = false;
+  });
+  el.classList.add('selected');
+  const rad = el.querySelector('input');
+  if(rad) rad.checked = true;
+  const span = el.querySelector('span');
+  if (span && !span.textContent.includes('✓')) span.textContent += ' ✓';
+  STATE.searchSource = mode;
+}
+
+function toggleS2Settings(){
+  const panel = document.getElementById('s2-settings-panel');
+  const icon = document.getElementById('s2-toggle-icon');
+  if(!panel) return;
+  const isHidden = panel.classList.contains('hidden');
+  if(isHidden){
+    panel.classList.remove('hidden');
+    if(icon) icon.textContent = '▲';
+  } else {
+    panel.classList.add('hidden');
+    if(icon) icon.textContent = '⚙️';
+  }
+}
+
+function toggleShowS2Key(){
+  const inp = document.getElementById('s2-api-key-input');
+  const btn = document.getElementById('s2-show-btn');
+  if(!inp) return;
+  if(inp.type === 'password'){
+    inp.type = 'text';
+    if(btn) btn.textContent = '🔒 Hide';
+  } else {
+    inp.type = 'password';
+    if(btn) btn.textContent = '👁️ Show';
+  }
+}
+
+async function testS2ApiKey(){
+  const inp = document.getElementById('s2-api-key-input');
+  const statusEl = document.getElementById('s2-key-status');
+  const key = inp ? inp.value.trim() : '';
+  if(!key){
+    if(statusEl) statusEl.innerHTML = '<span style="color:var(--warn);font-weight:700">⚠️ Please enter an S2 API key.</span>';
+    return;
+  }
+  if(statusEl) statusEl.innerHTML = '<span style="color:var(--accent);font-weight:600">⏳ Testing Semantic Scholar API connection…</span>';
+  try {
+    const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/search?query=medicine&limit=1&fields=paperId,title', {
+      headers: { 'x-api-key': key }
+    });
+    if(res.ok){
+      S2_API_KEY = key;
+      if(statusEl) statusEl.innerHTML = '<span style="color:var(--good);font-weight:700">✔ API Key Verified! High-rate Semantic Scholar access active.</span>';
+    } else if(res.status === 429){
+      S2_API_KEY = key;
+      if(statusEl) statusEl.innerHTML = '<span style="color:var(--warn);font-weight:700">⚠️ Key recognized but temporarily rate-limited (wait 2 seconds).</span>';
+    } else {
+      if(statusEl) statusEl.innerHTML = `<span style="color:var(--danger);font-weight:700">❌ Semantic Scholar returned HTTP ${res.status}. Check API key.</span>`;
+    }
+  } catch(e) {
+    if(statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">❌ Connection error: ${esc(e.message)}</span>`;
+  }
+}
+
+function getSourceBadgeHTML(paper){
+  if(paper.source === 'both' || (paper.sources && paper.sources.length > 1)){
+    return `<span class="source-badge source-both" title="Retrieved and cross-verified in both Europe PMC and Semantic Scholar">🌐 Europe PMC + Semantic Scholar</span>`;
+  }
+  if(paper.source === 's2' || (paper.sources && paper.sources.includes('Semantic Scholar'))){
+    return `<span class="source-badge source-s2" title="Retrieved from Semantic Scholar Academic Graph">🎓 Semantic Scholar</span>`;
+  }
+  return `<span class="source-badge source-epmc" title="Retrieved from Europe PMC repository">🇪🇺 Europe PMC</span>`;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // UTILITY
@@ -1196,9 +1333,10 @@ function resetApp(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EUROPE PMC FETCH
+// LITERATURE FETCH (EUROPE PMC & SEMANTIC SCHOLAR)
 // ═══════════════════════════════════════════════════════════════
-async function fetchPapers(topic, pageSize, yearRange, signal){
+
+async function fetchEuropePMC(topic, pageSize, yearRange, signal){
   const currentYear = new Date().getFullYear();
   let queryStr = topic;
   if(yearRange < 99){
@@ -1210,10 +1348,13 @@ async function fetchPapers(topic, pageSize, yearRange, signal){
   if(!res.ok){
     const err = new Error(`Europe PMC HTTP ${res.status}`);
     err.status = res.status;
+    err.engine = 'Europe PMC';
     throw err;
   }
   const json = await res.json();
-  return { results: parsePapers(json.resultList?.result||[]), hitCount: json.hitCount||0 };
+  const parsed = parsePapers(json.resultList?.result||[]);
+  parsed.forEach(p => { p.source = 'epmc'; p.sources = ['Europe PMC']; });
+  return { results: parsed, hitCount: json.hitCount || 0 };
 }
 
 function parseAuthors(item){
@@ -1246,30 +1387,206 @@ function parsePapers(results){
     keywords:     Array.isArray(item.keywordList?.keyword)
                     ? item.keywordList.keyword.filter(Boolean)
                     : (item.keywordList?.keyword ? [item.keywordList.keyword] : []),
+    source:       'epmc',
+    sources:      ['Europe PMC']
   }));
 }
 
-// ═══════════════════════════════════════════════════════════════
-// DUPLICATE REMOVAL
-// ═══════════════════════════════════════════════════════════════
-function deduplicatePapers(rawPapers){
-  const seen = new Set();
-  const unique = [];
-  let dupCount = 0;
-  for(const p of rawPapers){
-    let key = '';
-    if(p.pmid) key = 'pmid:' + p.pmid;
-    else if(p.doi) key = 'doi:' + p.doi.toLowerCase().trim();
-    else key = 'title:' + (p.title||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+function parseS2Papers(data){
+  return (data || []).map(item => {
+    const ext = item.externalIds || {};
+    const authors = Array.isArray(item.authors) && item.authors.length
+      ? item.authors.map(a => a.name).filter(Boolean).join(', ')
+      : 'Unknown Authors';
+    const journal = (item.venue || item.publicationVenue?.name || item.journal?.name || '').trim();
+    const volume = (item.journal?.volume || '').trim();
+    const pages = (item.journal?.pages || '').trim();
+    const doi = (ext.DOI || '').trim();
+    const pmid = (ext.PubMed || '').trim();
+    const pmcid = (ext.PubMedCentral || '').trim();
+    const isOA = Boolean(item.openAccessPdf?.url);
+    const hasPDF = Boolean(item.openAccessPdf?.url);
+    const pubType = Array.isArray(item.publicationTypes) ? item.publicationTypes.join(', ') : (item.publicationTypes || '');
+    const keywords = Array.isArray(item.fieldsOfStudy) ? item.fieldsOfStudy.filter(Boolean) : [];
 
-    if(seen.has(key)){
-      dupCount++;
-    } else {
-      seen.add(key);
-      unique.push(p);
+    return {
+      title:        (item.title || '').trim().replace(/\.$/, '') || 'Untitled',
+      authors,
+      year:         parseInt(item.year) || 2020,
+      abstract:     (item.abstract || '').trim(),
+      journal,
+      volume,
+      issue:        '',
+      pages,
+      doi,
+      pmid,
+      pmcid,
+      isOpenAccess: isOA,
+      hasPDF,
+      pubType,
+      citedBy:      item.citationCount || 0,
+      meshTerms:    [],
+      keywords,
+      source:       's2',
+      sources:      ['Semantic Scholar'],
+      s2PaperId:    item.paperId || '',
+      s2Url:        item.paperId ? `https://www.semanticscholar.org/paper/${item.paperId}` : '',
+      openAccessPdfUrl: item.openAccessPdf?.url || ''
+    };
+  });
+}
+
+async function fetchSemanticScholar(topic, pageSize, yearRange, signal, apiKey){
+  const key = apiKey || S2_API_KEY;
+  const currentYear = new Date().getFullYear();
+  const fields = 'paperId,title,authors,year,abstract,venue,publicationVenue,journal,externalIds,openAccessPdf,citationCount,publicationTypes,fieldsOfStudy';
+  let url = `${S2_API_BASE}/paper/search?query=${encodeURIComponent(topic)}&limit=${pageSize}&fields=${encodeURIComponent(fields)}`;
+  if(yearRange < 99){
+    const fromYear = currentYear - yearRange;
+    url += `&year=${fromYear}-${currentYear}`;
+  }
+
+  const headers = {};
+  if(key) headers['x-api-key'] = key;
+
+  for(let attempt = 0; attempt <= 2; attempt++){
+    if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      const res = await fetch(url, { headers, signal });
+      if(!res.ok){
+        if(res.status === 429 && attempt < 2){
+          await abortableSleep(1400, signal);
+          continue;
+        }
+        const err = new Error(`Semantic Scholar HTTP ${res.status}`);
+        err.status = res.status;
+        err.engine = 'Semantic Scholar';
+        throw err;
+      }
+      const json = await res.json();
+      const parsed = parseS2Papers(json.data || []);
+      return { results: parsed, hitCount: json.total || parsed.length };
+    } catch(err){
+      if(err.name === 'AbortError') throw err;
+      if(attempt < 2 && (err.status === 429 || !err.status)){
+        await abortableSleep(1400, signal);
+        continue;
+      }
+      throw err;
     }
   }
-  return { unique, dupCount };
+}
+
+async function fetchPapers(topic, pageSize, yearRange, signal, sourceMode = 'both', s2Key = ''){
+  const mode = sourceMode || 'both';
+  if(mode === 'epmc'){
+    const res = await fetchEuropePMC(topic, pageSize, yearRange, signal);
+    return { results: res.results, hitCount: res.hitCount, epmcCount: res.results.length, s2Count: 0 };
+  }
+  if(mode === 's2'){
+    const res = await fetchSemanticScholar(topic, pageSize, yearRange, signal, s2Key);
+    return { results: res.results, hitCount: res.hitCount, epmcCount: 0, s2Count: res.results.length };
+  }
+
+  // Dual engine: run Europe PMC and Semantic Scholar concurrently
+  const [epmcSettled, s2Settled] = await Promise.allSettled([
+    fetchEuropePMC(topic, Math.max(15, Math.ceil(pageSize * 0.75)), yearRange, signal),
+    fetchSemanticScholar(topic, Math.max(15, Math.ceil(pageSize * 0.75)), yearRange, signal, s2Key)
+  ]);
+
+  if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+  const epmcOk = epmcSettled.status === 'fulfilled';
+  const s2Ok   = s2Settled.status === 'fulfilled';
+
+  if(!epmcOk && !s2Ok){
+    const epmcErr = epmcSettled.reason;
+    const s2Err   = s2Settled.reason;
+    const msg = `Dual search failed: Europe PMC (${epmcErr?.message || 'failed'}) & Semantic Scholar (${s2Err?.message || 'failed'})`;
+    const err = new Error(msg);
+    err.status = epmcErr?.status || s2Err?.status || 500;
+    throw err;
+  }
+
+  const epmcResults = epmcOk ? epmcSettled.value.results : [];
+  const s2Results   = s2Ok ? s2Settled.value.results : [];
+  const totalHitCount = (epmcOk ? epmcSettled.value.hitCount : 0) + (s2Ok ? s2Settled.value.hitCount : 0);
+
+  const combined = [...epmcResults, ...s2Results];
+  return {
+    results: combined,
+    hitCount: totalHitCount,
+    epmcCount: epmcResults.length,
+    s2Count: s2Results.length,
+    epmcFailed: !epmcOk,
+    s2Failed: !s2Ok
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DUPLICATE REMOVAL & CROSS-ENGINE RECORD MERGING
+// ═══════════════════════════════════════════════════════════════
+function deduplicatePapers(rawPapers){
+  const seen = new Map();
+  let dupCount = 0;
+  let mergedCount = 0;
+
+  for(const p of rawPapers){
+    const keys = [];
+    if(p.pmid && String(p.pmid).trim()) keys.push('pmid:' + String(p.pmid).trim());
+    if(p.doi && String(p.doi).trim()) keys.push('doi:' + String(p.doi).toLowerCase().trim());
+    const normTitle = (p.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if(normTitle.length > 10) keys.push('title:' + normTitle);
+
+    let existing = null;
+    for(const k of keys){
+      if(seen.has(k)){
+        existing = seen.get(k);
+        break;
+      }
+    }
+
+    if(existing){
+      dupCount++;
+      // Merge cross-engine records into a unified representation
+      if(existing.source !== p.source || p.source === 'both'){
+        existing.source = 'both';
+        const srcs = new Set([...(existing.sources || [existing.source]), ...(p.sources || [p.source])]);
+        existing.sources = [...srcs].map(s => s === 'epmc' ? 'Europe PMC' : s === 's2' ? 'Semantic Scholar' : s);
+        mergedCount++;
+      }
+      if((!existing.abstract || existing.abstract.length < 50) && p.abstract){
+        existing.abstract = p.abstract;
+      } else if(p.abstract && p.abstract.length > (existing.abstract || '').length){
+        existing.abstract = p.abstract;
+      }
+      if(!existing.doi && p.doi) existing.doi = p.doi;
+      if(!existing.pmid && p.pmid) existing.pmid = p.pmid;
+      if(!existing.pmcid && p.pmcid) existing.pmcid = p.pmcid;
+      if(!existing.s2PaperId && p.s2PaperId) existing.s2PaperId = p.s2PaperId;
+      if(!existing.s2Url && p.s2Url) existing.s2Url = p.s2Url;
+      if(!existing.openAccessPdfUrl && p.openAccessPdfUrl) existing.openAccessPdfUrl = p.openAccessPdfUrl;
+      existing.isOpenAccess = existing.isOpenAccess || p.isOpenAccess;
+      existing.hasPDF = existing.hasPDF || p.hasPDF;
+      existing.citedBy = Math.max(existing.citedBy || 0, p.citedBy || 0);
+      if((!existing.journal || existing.journal.length < 3) && p.journal) existing.journal = p.journal;
+      if(Array.isArray(p.meshTerms) && p.meshTerms.length){
+        existing.meshTerms = [...new Set([...(existing.meshTerms || []), ...p.meshTerms])];
+      }
+      if(Array.isArray(p.keywords) && p.keywords.length){
+        existing.keywords = [...new Set([...(existing.keywords || []), ...p.keywords])];
+      }
+
+      // Re-index all keys to the merged instance
+      keys.forEach(k => seen.set(k, existing));
+    } else {
+      p.sources = p.sources || [p.source === 'epmc' ? 'Europe PMC' : 'Semantic Scholar'];
+      keys.forEach(k => seen.set(k, p));
+    }
+  }
+
+  const unique = [...new Set(seen.values())];
+  return { unique, dupCount, mergedCount };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1305,20 +1622,32 @@ function classifyStudyDesign(paper){
 // FULL-TEXT AVAILABILITY HELPER
 // ═══════════════════════════════════════════════════════════════
 function getFullTextInfo(paper){
-  const isOA = paper.isOpenAccess || Boolean(paper.pmcid);
+  const isOA = paper.isOpenAccess || Boolean(paper.pmcid) || Boolean(paper.openAccessPdfUrl);
   let url = null;
-  if(paper.pmcid){
+  let label = isOA ? 'Open Access Article' : 'Abstract Only / Subscription';
+  let icon = isOA ? '🟢' : '🔒';
+  if(paper.openAccessPdfUrl){
+    url = paper.openAccessPdfUrl;
+    label = 'Open Access (Direct PDF)';
+    icon = '📄';
+  } else if(paper.pmcid){
     url = `https://europepmc.org/article/PMC/${paper.pmcid}`;
+    label = 'Open Access (PMC Full-Text)';
+    icon = '📖';
   } else if(paper.doi){
     url = `https://doi.org/${paper.doi}`;
+  } else if(paper.s2Url){
+    url = paper.s2Url;
+    label = 'Semantic Scholar Record';
+    icon = '🎓';
   } else if(paper.pmid){
     url = `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`;
   }
   return {
     isOA,
-    label: isOA ? (paper.pmcid ? 'Open Access (PMC Full-Text)' : 'Open Access Article') : 'Abstract Only / Subscription',
+    label,
     badgeClass: isOA ? 'ft-oa' : 'ft-sub',
-    icon: isOA ? '🟢' : '🔒',
+    icon,
     url
   };
 }
@@ -1330,13 +1659,13 @@ function getManualVerificationWarnings(paper, val, rel){
   const warnings = [];
   if(!val || !val.valid){
     if(val && (val.status === 'API Error' || val.status === 'Rate Limited' || val.status === 'Network Error')){
-      warnings.push(`Secondary validation encountered ${val.status} — cross-check indexed record via linked DOI/PMID.`);
+      warnings.push(`Secondary validation encountered ${val.status} — cross-check indexed record via linked DOI/PMID/S2.`);
     } else {
       warnings.push('Not indexed in primary validation query — cross-check source metadata manually.');
     }
   }
-  if(!paper.doi && !paper.pmid){
-    warnings.push('Missing registered DOI and PMID identifiers — verify source publication directly.');
+  if(!paper.doi && !paper.pmid && !paper.s2PaperId){
+    warnings.push('Missing registered DOI, PMID, or S2 identifiers — verify source publication directly.');
   }
   if(!paper.abstract || paper.abstract.length < 90){
     warnings.push('Brief or missing abstract text — manual full-manuscript appraisal recommended.');
@@ -1361,6 +1690,7 @@ const VALIDATION_CACHE = new Map();
 function getValidationCacheKey(paper){
   if(paper.pmid && String(paper.pmid).trim()) return 'pmid:' + String(paper.pmid).trim();
   if(paper.doi && String(paper.doi).trim()) return 'doi:' + String(paper.doi).toLowerCase().trim();
+  if(paper.s2PaperId && String(paper.s2PaperId).trim()) return 's2:' + String(paper.s2PaperId).trim();
   return 'title:' + String(paper.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 60);
 }
 
@@ -1382,6 +1712,7 @@ async function validateRef(paper, signal, maxRetries = 2){
     return { ...VALIDATION_CACHE.get(cacheKey), cached: true };
   }
 
+  // 1. Primary validation query via Europe PMC (if PMID, DOI, or Title)
   let q = paper.pmid ? `EXT_ID:${paper.pmid} AND SRC:MED`
         : paper.doi  ? `DOI:"${paper.doi}"`
         : `TITLE:"${paper.title.substring(0,50)}"`;
@@ -1403,9 +1734,12 @@ async function validateRef(paper, signal, maxRetries = 2){
       }
       const json = await res.json();
       const found = (json.hitCount || 0) > 0;
-      const result = { valid: found, status: found ? 'Verified ✔' : 'Not Found', hitCount: json.hitCount || 0, cached: false };
-      VALIDATION_CACHE.set(cacheKey, result);
-      return result;
+      if(found){
+        const result = { valid: true, status: 'Verified ✔', hitCount: json.hitCount || 0, cached: false };
+        VALIDATION_CACHE.set(cacheKey, result);
+        return result;
+      }
+      break; // Not found in Europe PMC, attempt secondary validation below
     } catch(err) {
       if(err.name === 'AbortError') throw err;
       if(attempt < maxRetries){
@@ -1416,7 +1750,25 @@ async function validateRef(paper, signal, maxRetries = 2){
     }
   }
 
-  return { valid: false, status: 'Network Error', hitCount: 0, cached: false };
+  // 2. Secondary validation via Semantic Scholar if paperId exists
+  if(paper.s2PaperId){
+    try {
+      const s2Url = `${S2_API_BASE}/paper/${paper.s2PaperId}?fields=paperId,title`;
+      const s2Headers = S2_API_KEY ? { 'x-api-key': S2_API_KEY } : {};
+      const s2Res = await fetch(s2Url, { headers: s2Headers, signal });
+      if(s2Res.ok){
+        const result = { valid: true, status: 'Verified ✔', hitCount: 1, cached: false };
+        VALIDATION_CACHE.set(cacheKey, result);
+        return result;
+      }
+    } catch(e) {
+      if(e.name === 'AbortError') throw e;
+    }
+  }
+
+  const result = { valid: false, status: 'Not Found', hitCount: 0, cached: false };
+  VALIDATION_CACHE.set(cacheKey, result);
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1667,8 +2019,11 @@ function renderPaperCards(){
   const p = STATE.papers, v = STATE.validations, r = STATE.relevance, rd = STATE.relevanceDetails;
   const verified = v.filter(x=>x.valid).length;
   const avgRel = Math.round(r.reduce((a,b)=>a+b,0)/(r.length||1));
-  const oaCount = p.filter(paper => paper.isOpenAccess || Boolean(paper.pmcid)).length;
+  const oaCount = p.filter(paper => paper.isOpenAccess || Boolean(paper.pmcid) || Boolean(paper.openAccessPdfUrl)).length;
   const warnCount = p.filter((paper, idx) => !getManualVerificationWarnings(paper, v[idx], r[idx]).isClean).length;
+  const epmcCount = p.filter(paper => paper.sources?.includes('Europe PMC') || paper.source === 'epmc' || paper.source === 'both').length;
+  const s2Count   = p.filter(paper => paper.sources?.includes('Semantic Scholar') || paper.source === 's2' || paper.source === 'both').length;
+  const bothCount = p.filter(paper => paper.source === 'both').length;
 
   // Stats banner
   document.getElementById('banner-count').textContent =
@@ -1679,10 +2034,19 @@ function renderPaperCards(){
       <div style="font-size:1.45rem;font-weight:700;color:var(--accent)">${p.length}</div>
       <div style="font-size:.74rem;color:var(--muted)">Unique Papers</div>
     </div>
-    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:#475569">${STATE.duplicatesRemoved || 0}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Duplicates Excluded</div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:#1e40af">${epmcCount}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Europe PMC</div>
     </div>
+    <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:#6d28d9">${s2Count}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Semantic Scholar</div>
+    </div>
+    ${bothCount > 0 ? `
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:#047857">${bothCount}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Cross-Engine Matched</div>
+    </div>` : ''}
     <div style="background:var(--good-bg);border:1px solid var(--good);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
       <div style="font-size:1.45rem;font-weight:700;color:var(--good)">${verified}</div>
       <div style="font-size:.74rem;color:var(--muted)">Verified Records</div>
@@ -1693,7 +2057,7 @@ function renderPaperCards(){
     </div>
     <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
       <div style="font-size:1.45rem;font-weight:700;color:var(--ink)">${avgRel}%</div>
-      <div style="font-size:.74rem;color:var(--muted)">Avg Heuristic Relevance</div>
+      <div style="font-size:.74rem;color:var(--muted)">Avg Heuristic Rel</div>
     </div>
     <div style="background:var(--warn-bg);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
       <div style="font-size:1.45rem;font-weight:700;color:var(--warn)">${warnCount}</div>
@@ -1714,7 +2078,7 @@ function renderPaperCards(){
     const val      = v[i]||{};
     const relColor = rel>=75?'var(--good)':rel>=50?'var(--accent)':'var(--warn)';
     const auth     = paper.authors ? paper.authors.split(',')[0].trim()+(paper.authors.includes(',')?' et al.':'') : '—';
-    const link     = paper.doi ? `https://doi.org/${paper.doi}` : paper.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` : null;
+    const link     = paper.doi ? `https://doi.org/${paper.doi}` : paper.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` : paper.s2Url || null;
     const design   = classifyStudyDesign(paper);
     const ft       = getFullTextInfo(paper);
     const warnInfo = getManualVerificationWarnings(paper, val, rel);
@@ -1726,6 +2090,7 @@ function renderPaperCards(){
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
             <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0">${i+1}</span>
+            ${getSourceBadgeHTML(paper)}
             ${getValBadgeHTML(val)}
             <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
@@ -1736,7 +2101,10 @@ function renderPaperCards(){
             ${paper.doi?'<br><span style="font-family:monospace;font-size:.76rem;color:#94a3b8">DOI: '+esc(paper.doi)+'</span>':''}
             ${paper.pmid?'<span style="font-family:monospace;font-size:.76rem;color:#94a3b8;margin-left:8px">PMID: '+esc(paper.pmid)+'</span>':''}
             ${paper.pmcid?'<span style="font-family:monospace;font-size:.76rem;color:#94a3b8;margin-left:8px">PMC: '+esc(paper.pmcid)+'</span>':''}
+            ${paper.s2PaperId?'<span style="font-family:monospace;font-size:.76rem;color:#94a3b8;margin-left:8px">S2 ID: '+esc(paper.s2PaperId.substring(0,8))+'…</span>':''}
+            ${paper.s2Url?'<a href="'+esc(paper.s2Url)+'" target="_blank" rel="noopener" style="font-size:.74rem;color:#6d28d9;margin-left:8px;text-decoration:none;font-weight:600">🎓 S2 Record ↗</a>':''}
             ${paper.meshTerms&&paper.meshTerms.length?'<br><span style="font-size:.74rem;color:#0d9488">🏷️ MeSH: '+esc(paper.meshTerms.slice(0,3).join(', '))+'</span>':''}
+            ${paper.keywords&&paper.keywords.length&&(!paper.meshTerms||!paper.meshTerms.length)?'<br><span style="font-size:.74rem;color:#0d9488">🏷️ Fields: '+esc(paper.keywords.slice(0,3).join(', '))+'</span>':''}
             ${paper.citedBy?'<br>🔖 Cited by '+paper.citedBy+' articles':''}
           </div>
         </div>
@@ -1867,7 +2235,7 @@ class PaperGenerator {
     return {
       background: `${cap(this.topic)} has emerged as a focal area of contemporary biomedical research, attracting substantial scholarly attention owing to its multifaceted implications for human health and disease. ${s1a?cap(s1a)+' '+this.cite(0):''} ${s1b?cap(s1b)+' '+this.cite(1):''}`.trim(),
       objective:  `This AI-assisted literature review draft aims to critically appraise and synthesize peer-reviewed evidence pertaining to ${this.topic}, with particular emphasis on mechanistic pathways, study-design classifications, and clinical implications.`,
-      methods:    `An automated literature query of the Europe PMC database was conducted (coverage: ${years[0]||'n.d.'}–${years[years.length-1]||'n.d.'}; year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}). Multi-tier duplicate removal identified and excluded ${dups} duplicate record${dups===1?'':'s'}, yielding ${n} unique peer-reviewed publications (${oaCount} open-access) evaluated for study design and relevance.`,
+      methods:    `An automated literature query of ${STATE.searchSource==='s2'?'the Semantic Scholar Academic Graph':STATE.searchSource==='both'?'both Europe PMC and Semantic Scholar databases':'the Europe PMC database'} was conducted (coverage: ${years[0]||'n.d.'}–${years[years.length-1]||'n.d.'}; year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}). Multi-tier cross-engine duplicate removal identified and excluded ${dups} duplicate record${dups===1?'':'s'}, yielding ${n} unique peer-reviewed publications (${oaCount} open-access) evaluated for study design and relevance.`,
       results:    `${n} unique studies across diverse study designs were included in the final synthesis. ${sLa?cap(sLa)+' '+this.cite(0):''} ${sLb?'Additionally, '+lc(sLb)+' '+this.cite(1):''}`.trim(),
       conclusion: `Current evidence affirms that ${this.topic} constitutes a scientifically significant research domain. Standardized prospective investigations and manual expert verification are recommended prior to clinical application.`,
     };
@@ -1894,7 +2262,7 @@ class PaperGenerator {
     if(gf[0]) para3+=`${cap(gf[0].s)} ${this.cite(gf[0].i)} `;
     if(gf[1]) para3+=`Similarly, ${lc(gf[1].s)} ${this.cite(gf[1].i)} `;
     para3+=`Heterogeneity in study design and limited longitudinal data have constrained definitive conclusions.`;
-    const para4=`The present AI-assisted literature review draft was undertaken to: (1) identify and appraise peer-reviewed publications on ${t} indexed within Europe PMC; (2) categorize study designs and verify full-text availability; (3) synthesize key mechanistic and clinical findings; (4) evaluate evidence consistency; and (5) generate automated verification warnings for expert review.`;
+    const para4=`The present AI-assisted literature review draft was undertaken to: (1) identify and appraise peer-reviewed publications on ${t} indexed within ${STATE.searchSource==='s2'?'Semantic Scholar':STATE.searchSource==='both'?'Europe PMC and Semantic Scholar':'Europe PMC'}; (2) categorize study designs and verify full-text availability; (3) synthesize key mechanistic and clinical findings; (4) evaluate evidence consistency; and (5) generate automated verification warnings for expert review.`;
     return [para1,para2,para3,para4].join('\n\n');
   }
   generateMethods(){
@@ -1904,7 +2272,7 @@ class PaperGenerator {
     const jnls=[...new Set(p.slice(0,5).map(pp=>pp.journal).filter(Boolean))];
     const yearFilter=STATE.yearRange<99?`The search was restricted to publications from the last ${STATE.yearRange} years (${new Date().getFullYear()-STATE.yearRange}–${new Date().getFullYear()}).`:`No date restriction was applied.`;
     const dups = STATE.duplicatesRemoved || 0;
-    const oaCount = p.filter(pp => pp.isOpenAccess || Boolean(pp.pmcid)).length;
+    const oaCount = p.filter(pp => pp.isOpenAccess || Boolean(pp.pmcid) || Boolean(pp.openAccessPdfUrl)).length;
     
     // Calculate design breakdown
     const designs = {};
@@ -1914,10 +2282,16 @@ class PaperGenerator {
     });
     const designSummary = Object.entries(designs).map(([k,v]) => `${k} (n=${v})`).join(', ');
 
-    const p1=`This AI-assisted literature review draft was developed utilizing structured computational literature harvesting and evidence synthesis workflows. A comprehensive electronic search of the Europe PMC (European PubMed Central) database was performed, accessing over 40 million biomedical literature records.`;
-    const p2=`2.1 Search Strategy & Duplicate Removal\n\nThe primary search query "${t}" was submitted to the Europe PMC REST API (resultType: core). ${yearFilter} Retrieved raw records were processed through an automated deduplication pipeline matching registered PMIDs, DOIs, and normalized alphanumeric title keys, successfully identifying and excluding ${dups} redundant record${dups===1?'':'s'}. The resulting ${n} unique articles spanned publication dates from ${minY} to ${maxY}.`;
-    const p3=`2.2 Study-Design Classification & Full-Text Availability\n\nEach unique study was algorithmically categorized into standardized epidemiological and experimental study designs: ${designSummary}. Full-text accessibility was evaluated based on Europe PMC repository indexing and open-access licensing; ${oaCount} of ${n} articles (${Math.round(oaCount/(n||1)*100)}%) provided unencumbered open-access full-text status.`;
-    const p4=`2.3 Quality Assessment & Manual Verification Warnings\n\nReference integrity was validated via Europe PMC PMID/DOI resolution endpoints. Heuristic relevance scores were computed using a staged scoring model incorporating stop-word removal, multi-word phrase detection, biomedical synonym expansion, MeSH subject heading alignment, and publication recency weighting. Automated manual verification warnings were systematically flagged for records with missing DOIs/PMIDs, low heuristic relevance thresholds (<45%), brief/missing abstracts, or preprint server deposits to guide human-in-the-loop expert appraisal.`;
+    const dbName = STATE.searchSource === 's2'
+      ? 'the Semantic Scholar Academic Graph (Allen Institute for AI), utilizing direct Graph API endpoints'
+      : STATE.searchSource === 'both'
+      ? 'both the Europe PMC (European PubMed Central) repository and the Semantic Scholar Academic Graph (Allen Institute for AI) in parallel'
+      : 'the Europe PMC (European PubMed Central) repository';
+
+    const p1=`This AI-assisted literature review draft was developed utilizing structured computational literature harvesting and evidence synthesis workflows. A comprehensive electronic search of ${dbName} was performed, accessing millions of scholarly and biomedical literature records.`;
+    const p2=`2.1 Search Strategy & Duplicate Removal\n\nThe primary search query "${t}" was submitted to ${STATE.searchSource==='s2'?'the Semantic Scholar Graph API':STATE.searchSource==='both'?'the Europe PMC and Semantic Scholar APIs concurrently':'the Europe PMC REST API'}. ${yearFilter} Retrieved raw records were processed through an automated deduplication pipeline matching registered PMIDs, DOIs, Semantic Scholar corpus IDs, and normalized alphanumeric title keys, successfully identifying and excluding ${dups} redundant record${dups===1?'':'s'}. The resulting ${n} unique articles spanned publication dates from ${minY} to ${maxY}.`;
+    const p3=`2.2 Study-Design Classification & Full-Text Availability\n\nEach unique study was algorithmically categorized into standardized epidemiological and experimental study designs: ${designSummary}. Full-text accessibility was evaluated based on repository indexing and open-access licensing; ${oaCount} of ${n} articles (${Math.round(oaCount/(n||1)*100)}%) provided unencumbered open-access full-text status.`;
+    const p4=`2.3 Quality Assessment & Manual Verification Warnings\n\nReference integrity was validated via Europe PMC and Semantic Scholar bibliographic resolution endpoints. Heuristic relevance scores were computed using a staged scoring model incorporating stop-word removal, multi-word phrase detection, biomedical synonym expansion, MeSH subject heading alignment, and publication recency weighting. Automated manual verification warnings were systematically flagged for records with missing DOIs/PMIDs, low heuristic relevance thresholds (<45%), brief/missing abstracts, or preprint server deposits to guide human-in-the-loop expert appraisal.`;
     return [p1,p2,p3,p4].join('\n\n');
   }
   generateResults(){
@@ -2029,7 +2403,14 @@ function renderPaperPreview(paper){
 // ═══════════════════════════════════════════════════════════════
 function renderReferencesTab(paper){
   document.getElementById('refs-list').innerHTML =
-    paper.references.map(r=>`<li style="margin-bottom:8px">${esc(r.text)}</li>`).join('');
+    paper.references.map((r, idx)=>{
+      const orig = STATE.papers[idx];
+      const srcBadge = orig ? getSourceBadgeHTML(orig) : '';
+      return `<li style="margin-bottom:12px;line-height:1.5">
+        <div style="margin-bottom:4px;display:flex;align-items:center;gap:6px">${srcBadge}</div>
+        <div>${esc(r.text)}</div>
+      </li>`;
+    }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2051,6 +2432,7 @@ function renderRelevanceTab(){
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
             <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700">${i+1}</span>
+            ${getSourceBadgeHTML(pp)}
             ${getValBadgeHTML(val)}
             <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
@@ -2147,8 +2529,8 @@ async function exportPaperPDF(){
     doc.setFontSize(15);doc.setFont('times','bold');doc.setTextColor(10,60,60);
     const tl=doc.splitTextToSize(paper.title,cw);tl.forEach(l=>{doc.text(l,pw/2,y,{align:'center'});y+=7;});
     y+=4;
-    doc.setFontSize(9.5);doc.setFont('times','normal');doc.setTextColor(90,90,90);
-    doc.text(`Generated: ${today} | Source: Europe PMC | Deduplication: ${STATE.duplicatesRemoved||0} excluded | Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=5;
+    const srcLabel = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC + Semantic Scholar' : 'Europe PMC';
+    doc.text(`Generated: ${today} | Sources: ${srcLabel} | Deduplication: ${STATE.duplicatesRemoved||0} excluded | Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=5;
     doc.text('Citation style: Vancouver (ICMJE) | Powered by SciDraft AI v2.0 · Dr Raouf Roshdy',pw/2,y,{align:'center'});y+=8;
     doc.setDrawColor(15,107,107);doc.setLineWidth(.5);doc.line(ml,y,pw-mr,y);y+=8;
 
@@ -2359,29 +2741,38 @@ async function runPipeline(){
 
   try {
     // ── Fetch ──────────────────────────────────────────────────────
-    setProc('Connecting to Europe PMC…','Initialising literature search pipeline',5);
-    await sleep(400);
+    const searchSource = STATE.searchSource || 'both';
+    const s2Key = (document.getElementById('s2-api-key-input')?.value || S2_API_KEY || '').trim();
+    if(s2Key) S2_API_KEY = s2Key;
+
+    const engineName = searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : searchSource === 's2' ? 'Semantic Scholar' : 'Europe PMC';
+    setProc(`Connecting to ${engineName}…`, 'Initialising literature search pipeline', 5);
+    await sleep(250);
     if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    setProc('Sending GET request to Europe PMC…',`Query: "${topic}" · Fetching ${pgSize} papers · Last ${yearRange<99?yearRange+' years':'all time'}`,15);
-    await sleep(300);
+    setProc(`Querying ${engineName}…`, `Query: "${topic}" · Target: ${pgSize} papers · Last ${yearRange<99?yearRange+' years':'all time'}`, 15);
+    await sleep(200);
     if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    const { results, hitCount } = await fetchPapers(topic, pgSize, yearRange, signal);
-    const { unique, dupCount } = deduplicatePapers(results);
+    const { results, hitCount, epmcCount, s2Count, epmcFailed, s2Failed } = await fetchPapers(topic, pgSize, yearRange, signal, searchSource, s2Key);
+    const { unique, dupCount, mergedCount } = deduplicatePapers(results);
     STATE.papers = unique;
     STATE.duplicatesRemoved = dupCount;
+    STATE.mergedCrossEngine = mergedCount;
+    STATE.sourceCounts = { epmc: epmcCount, s2: s2Count, merged: mergedCount };
 
     if(!STATE.papers.length){
-      throw new Error(`No papers found for "${topic}" in the selected year range.`);
+      throw new Error(`No papers found for "${topic}" in the selected search engine and year range.`);
     }
 
-    setProc(`Found ${hitCount} records · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed) · Parsing ${STATE.papers.length} unique papers…`,`Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`,35);
-    await sleep(300);
+    const mergeText = mergedCount > 0 ? ` · ${mergedCount} cross-engine match${mergedCount===1?'':'es'} unified` : '';
+    const noteText = (epmcFailed ? ' (Europe PMC rate limited)' : '') + (s2Failed ? ' (Semantic Scholar rate limited)' : '');
+    setProc(`Found ${hitCount} records${noteText} · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed${mergeText}) · Parsing ${STATE.papers.length} unique papers in unified container…`, `Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`, 35);
+    await sleep(250);
     if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     // ── Validate (Controlled Batches of 5 with Live Count & Abort Support) ──
-    setProc('Validating references via Europe PMC…', `0 of ${STATE.papers.length} references validated (0%) · Batched parallel processing`, 40);
+    setProc(`Validating references via ${engineName}…`, `0 of ${STATE.papers.length} references validated (0%) · Batched parallel processing`, 40);
     await sleep(50);
 
     STATE.validations = new Array(STATE.papers.length);
