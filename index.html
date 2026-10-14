@@ -973,11 +973,16 @@ async function testS2ApiKey(){
     if(statusEl) statusEl.innerHTML = '<span style="color:var(--warn);font-weight:700">⚠️ Please enter an S2 API key.</span>';
     return;
   }
-  if(statusEl) statusEl.innerHTML = '<span style="color:var(--accent);font-weight:600">⏳ Testing Semantic Scholar API connection…</span>';
   try {
-    const res = await fetch('https://api.semanticscholar.org/graph/v1/paper/search?query=medicine&limit=1&fields=paperId,title', {
-      headers: { 'x-api-key': key }
-    });
+    let res;
+    try {
+      res = await fetch(`/api/s2?query=medicine&limit=1&fields=paperId,title&key=${encodeURIComponent(key)}`);
+      if(res.status === 404) throw new Error('Proxy 404');
+    } catch(err) {
+      res = await fetch('https://api.semanticscholar.org/graph/v1/paper/search?query=medicine&limit=1&fields=paperId,title', {
+        headers: { 'x-api-key': key }
+      });
+    }
     if(res.ok){
       S2_API_KEY = key;
       if(statusEl) statusEl.innerHTML = '<span style="color:var(--good);font-weight:700">✔ API Key Verified! High-rate Semantic Scholar access active.</span>';
@@ -1083,6 +1088,11 @@ function showStep2Error(info){
 }
 
 function classifyPipelineError(err, topic, pageSize, yearRange){
+  const selectedEngineRadio = document.querySelector('input[name="searchengine"]:checked');
+  const currentMode = selectedEngineRadio ? selectedEngineRadio.value : (STATE.searchSource || 'both');
+  const activeEngine = err?.engine || (currentMode === 's2' ? 'Semantic Scholar' : currentMode === 'epmc' ? 'Europe PMC' : 'Europe PMC & Semantic Scholar');
+  const engineDomain = activeEngine === 'Semantic Scholar' ? 'api.semanticscholar.org' : activeEngine === 'Europe PMC' ? 'europepmc.org' : 'europepmc.org & api.semanticscholar.org';
+
   if(err && (err.name === 'AbortError' || err.message === 'The user aborted a request.' || err.message === 'Aborted')){
     return {
       title: 'Operation Cancelled',
@@ -1098,15 +1108,15 @@ function classifyPipelineError(err, topic, pageSize, yearRange){
     };
   }
 
-  const isRateLimit = (err && (err.status === 429 || /429|rate limit/i.test(err.message)));
+  const isRateLimit = (err && (err.status === 429 || /429|rate limit|too many requests/i.test(err.message)));
   if(isRateLimit){
     return {
       title: 'We couldn’t complete the search.',
       icon: '⏳',
       boxClass: 'alert-warn',
-      shortSub: 'Europe PMC returned HTTP 429 (Rate Limit)',
-      reason: 'Europe PMC returned HTTP 429. The server is temporarily throttling high-frequency requests.',
-      advice: 'Try again in a few seconds or reduce the number of papers to minimize API load.',
+      shortSub: `${activeEngine} returned HTTP 429 (Rate Limit)`,
+      reason: `${activeEngine} is temporarily throttling high-frequency requests from your network.`,
+      advice: 'Wait 10–15 seconds and retry, reduce target papers to 20, or switch to Dual Engine mode.',
       actionsHTML: `
         <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Try Again</button>
         <button class="alert-btn alert-btn-warn" onclick="reducePapersAndRetry()">📉 Reduce to 20 Papers &amp; Retry</button>
@@ -1122,7 +1132,7 @@ function classifyPipelineError(err, topic, pageSize, yearRange){
       icon: '🔍',
       boxClass: 'alert-warn',
       shortSub: '0 results returned for this query and time filter',
-      reason: `Europe PMC found zero matching records for "${topic}" in the last ${yearRange < 99 ? yearRange + ' years' : 'selected timeframe'}.`,
+      reason: `${activeEngine} found zero matching records for "${topic}" in the last ${yearRange < 99 ? yearRange + ' years' : 'selected timeframe'}.`,
       advice: 'Try broadening your search keywords, using common medical synonyms, or expanding the publication year range to "All time".',
       actionsHTML: `
         <button class="alert-btn alert-btn-primary" onclick="expandToAllTimeAndRetry()">🌐 Search All Time</button>
@@ -1137,9 +1147,9 @@ function classifyPipelineError(err, topic, pageSize, yearRange){
       title: 'Network Connection Failure',
       icon: '🌐',
       boxClass: 'alert-error',
-      shortSub: 'Unable to reach Europe PMC (https://www.ebi.ac.uk)',
-      reason: 'The browser could not establish a connection to Europe PMC. You may be offline, behind a strict corporate firewall, or experiencing DNS connectivity issues.',
-      advice: 'Check your internet connection, verify europepmc.org is accessible in your browser, then retry.',
+      shortSub: `Unable to reach ${activeEngine} (${engineDomain})`,
+      reason: `The browser could not establish a connection to ${activeEngine}. You may be offline, behind a strict corporate firewall/adblocker, or experiencing DNS connectivity issues.`,
+      advice: `Check your internet connection, verify ${engineDomain} is accessible in your browser, or switch search engine options.`,
       actionsHTML: `
         <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Retry Connection</button>
         <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">↩ Return to Step 1</button>
@@ -1151,9 +1161,9 @@ function classifyPipelineError(err, topic, pageSize, yearRange){
     title: 'We couldn’t complete the search.',
     icon: '❌',
     boxClass: 'alert-error',
-    shortSub: 'Europe PMC service error',
-    reason: err && err.message ? err.message : 'An unexpected error occurred while querying the Europe PMC REST API.',
-    advice: 'Try again in a few seconds or reduce the number of papers.',
+    shortSub: `${activeEngine} service error`,
+    reason: err && err.message ? err.message : `An unexpected error occurred while querying the ${activeEngine} API.`,
+    advice: 'Try again in a few seconds, reduce the number of papers, or switch search engines.',
     actionsHTML: `
       <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Try Again</button>
       <button class="alert-btn alert-btn-warn" onclick="reducePapersAndRetry()">📉 Reduce to 20 Papers</button>
@@ -1452,40 +1462,59 @@ async function fetchSemanticScholar(topic, pageSize, yearRange, signal, apiKey){
   const key = apiKey || S2_API_KEY;
   const currentYear = new Date().getFullYear();
   const fields = 'paperId,title,authors,year,abstract,venue,publicationVenue,journal,externalIds,openAccessPdf,citationCount,publicationTypes,fieldsOfStudy';
-  let url = `${S2_API_BASE}/paper/search?query=${encodeURIComponent(topic)}&limit=${pageSize}&fields=${encodeURIComponent(fields)}`;
+  let queryParams = `query=${encodeURIComponent(topic)}&limit=${pageSize}&fields=${encodeURIComponent(fields)}`;
   if(yearRange < 99){
     const fromYear = currentYear - yearRange;
-    url += `&year=${fromYear}-${currentYear}`;
+    queryParams += `&year=${fromYear}-${currentYear}`;
   }
 
-  const headers = {};
-  if(key) headers['x-api-key'] = key;
+  // Dual-target endpoints: 1) Same-origin /api/s2 proxy (bypasses browser adblockers/CORS), 2) Direct S2 API
+  const endpoints = [
+    { url: `/api/s2?${queryParams}`, isProxy: true },
+    { url: `${S2_API_BASE}/paper/search?${queryParams}`, isProxy: false }
+  ];
 
-  for(let attempt = 0; attempt <= 2; attempt++){
+  let lastErr = null;
+  for(const ep of endpoints){
     if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    try {
-      const res = await fetch(url, { headers, signal });
-      if(!res.ok){
-        if(res.status === 429 && attempt < 2){
+    for(let attempt = 0; attempt <= 2; attempt++){
+      if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      try {
+        const headers = {};
+        if(key) headers['x-api-key'] = key;
+        const res = await fetch(ep.url, { headers, signal });
+        if(!res.ok){
+          if(res.status === 429 && attempt < 2){
+            await abortableSleep(1400, signal);
+            continue;
+          }
+          if(res.status === 404 && ep.isProxy) break; // Proxy not present on static dev, fallback to direct
+          const err = new Error(`Semantic Scholar HTTP ${res.status}`);
+          err.status = res.status;
+          err.engine = 'Semantic Scholar';
+          throw err;
+        }
+        const json = await res.json();
+        const parsed = parseS2Papers(json.data || []);
+        return { results: parsed, hitCount: json.total || parsed.length };
+      } catch(err){
+        if(err.name === 'AbortError') throw err;
+        lastErr = err;
+        if(ep.isProxy && (err instanceof TypeError || err.status === 404)){
+          break; // Switch to direct endpoint immediately on proxy network drop
+        }
+        if(attempt < 2 && (err.status === 429 || !err.status)){
           await abortableSleep(1400, signal);
           continue;
         }
-        const err = new Error(`Semantic Scholar HTTP ${res.status}`);
-        err.status = res.status;
-        err.engine = 'Semantic Scholar';
-        throw err;
+        break;
       }
-      const json = await res.json();
-      const parsed = parseS2Papers(json.data || []);
-      return { results: parsed, hitCount: json.total || parsed.length };
-    } catch(err){
-      if(err.name === 'AbortError') throw err;
-      if(attempt < 2 && (err.status === 429 || !err.status)){
-        await abortableSleep(1400, signal);
-        continue;
-      }
-      throw err;
     }
+  }
+
+  if(lastErr){
+    lastErr.engine = 'Semantic Scholar';
+    throw lastErr;
   }
 }
 
@@ -1824,58 +1853,83 @@ async function validateRef(paper, signal, maxRetries = 2){
     return { ...VALIDATION_CACHE.get(cacheKey), cached: true };
   }
 
-  // 1. Primary validation query via Europe PMC (if PMID, DOI, or Title)
-  let q = paper.pmid ? `EXT_ID:${paper.pmid} AND SRC:MED`
-        : paper.doi  ? `DOI:"${paper.doi}"`
-        : `TITLE:"${paper.title.substring(0,50)}"`;
-  const url = `${EPMC}?query=${encodeURIComponent(q)}&format=json&pageSize=1`;
+  const currentMode = STATE.searchSource || 'both';
 
-  for(let attempt = 0; attempt <= maxRetries; attempt++){
-    if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    try {
-      const res = await fetch(url, { signal });
-      if(!res.ok){
-        // Exponential backoff for rate limit (429) or transient server errors (5xx)
-        if((res.status === 429 || res.status >= 500) && attempt < maxRetries){
+  // Helper for Semantic Scholar validation
+  const validateViaS2 = async () => {
+    if(!paper.s2PaperId) return null;
+    const s2Endpoints = [
+      `/api/s2?paperId=${encodeURIComponent(paper.s2PaperId)}&fields=paperId,title`,
+      `${S2_API_BASE}/paper/${paper.s2PaperId}?fields=paperId,title`
+    ];
+    for(const s2Url of s2Endpoints){
+      try {
+        const s2Headers = S2_API_KEY ? { 'x-api-key': S2_API_KEY } : {};
+        const s2Res = await fetch(s2Url, { headers: s2Headers, signal });
+        if(s2Res.ok){
+          const result = { valid: true, status: 'Verified ✔', hitCount: 1, cached: false };
+          VALIDATION_CACHE.set(cacheKey, result);
+          return result;
+        }
+        if(s2Res.status === 404 && s2Url.startsWith('/api')) continue;
+      } catch(e){
+        if(e.name === 'AbortError') throw e;
+      }
+    }
+    return null;
+  };
+
+  // Helper for Europe PMC validation
+  const validateViaEPMC = async () => {
+    let q = paper.pmid ? `EXT_ID:${paper.pmid} AND SRC:MED`
+          : paper.doi  ? `DOI:"${paper.doi}"`
+          : `TITLE:"${paper.title.substring(0,50)}"`;
+    const url = `${EPMC}?query=${encodeURIComponent(q)}&format=json&pageSize=1`;
+
+    for(let attempt = 0; attempt <= maxRetries; attempt++){
+      if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      try {
+        const res = await fetch(url, { signal });
+        if(!res.ok){
+          if((res.status === 429 || res.status >= 500) && attempt < maxRetries){
+            const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
+            await abortableSleep(backoffMs, signal);
+            continue;
+          }
+          break;
+        }
+        const json = await res.json();
+        const found = (json.hitCount || 0) > 0;
+        if(found){
+          const result = { valid: true, status: 'Verified ✔', hitCount: json.hitCount || 0, cached: false };
+          VALIDATION_CACHE.set(cacheKey, result);
+          return result;
+        }
+        break;
+      } catch(err) {
+        if(err.name === 'AbortError') throw err;
+        if(attempt < maxRetries){
           const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
           await abortableSleep(backoffMs, signal);
           continue;
         }
-        const failStatus = res.status === 429 ? 'Rate Limited' : 'API Error';
-        return { valid: false, status: failStatus, hitCount: 0, cached: false };
-      }
-      const json = await res.json();
-      const found = (json.hitCount || 0) > 0;
-      if(found){
-        const result = { valid: true, status: 'Verified ✔', hitCount: json.hitCount || 0, cached: false };
-        VALIDATION_CACHE.set(cacheKey, result);
-        return result;
-      }
-      break; // Not found in Europe PMC, attempt secondary validation below
-    } catch(err) {
-      if(err.name === 'AbortError') throw err;
-      if(attempt < maxRetries){
-        const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
-        await abortableSleep(backoffMs, signal);
-        continue;
       }
     }
-  }
+    return null;
+  };
 
-  // 2. Secondary validation via Semantic Scholar if paperId exists
-  if(paper.s2PaperId){
-    try {
-      const s2Url = `${S2_API_BASE}/paper/${paper.s2PaperId}?fields=paperId,title`;
-      const s2Headers = S2_API_KEY ? { 'x-api-key': S2_API_KEY } : {};
-      const s2Res = await fetch(s2Url, { headers: s2Headers, signal });
-      if(s2Res.ok){
-        const result = { valid: true, status: 'Verified ✔', hitCount: 1, cached: false };
-        VALIDATION_CACHE.set(cacheKey, result);
-        return result;
-      }
-    } catch(e) {
-      if(e.name === 'AbortError') throw e;
-    }
+  // 1. If in Semantic Scholar only mode, validate against Semantic Scholar first
+  if(currentMode === 's2'){
+    const s2Result = await validateViaS2();
+    if(s2Result) return s2Result;
+    const epmcResult = await validateViaEPMC();
+    if(epmcResult) return epmcResult;
+  } else {
+    // 2. Default / Dual / Europe PMC mode: Europe PMC first, then Semantic Scholar
+    const epmcResult = await validateViaEPMC();
+    if(epmcResult) return epmcResult;
+    const s2Result = await validateViaS2();
+    if(s2Result) return s2Result;
   }
 
   const result = { valid: false, status: 'Not Found', hitCount: 0, cached: false };
@@ -2863,7 +2917,9 @@ async function runPipeline(){
 
   try {
     // ── Fetch ──────────────────────────────────────────────────────
-    const searchSource = STATE.searchSource || 'both';
+    const checkedRadio = document.querySelector('input[name="searchengine"]:checked');
+    const searchSource = checkedRadio ? checkedRadio.value : (STATE.searchSource || 'both');
+    STATE.searchSource = searchSource;
     const s2Key = (document.getElementById('s2-api-key-input')?.value || S2_API_KEY || '').trim();
     if(s2Key) S2_API_KEY = s2Key;
 

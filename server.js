@@ -16,6 +16,10 @@ const MIME_TYPES = {
 
 function handler(req, res) {
   let reqPath = req.url.split('?')[0];
+  if (reqPath === '/api/s2') {
+    const s2Handler = require('./api/s2.js');
+    return s2Handler(req, res);
+  }
   if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
   
   const filePath = path.join(__dirname, decodeURIComponent(reqPath));
