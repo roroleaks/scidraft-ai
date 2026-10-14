@@ -48,7 +48,7 @@ body {
 .hdr-left  { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .hdr-center { flex: 1; text-align: center; }
 .hdr-center h1 { font-size: 1.35rem; font-weight: 600; margin-bottom: 4px; }
-.hdr-center p  { opacity: .88; font-size: .9rem; margin-top: 4px; }
+.hdr-center p  { opacity: .92; font-size: .92rem; margin-top: 4px; font-style: italic; }
 .hdr-right { flex-shrink: 0; }
 .lens-icon { color: #fff; opacity: .95; flex-shrink: 0; }
 .title-main { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; color: #fff; display: flex; align-items: center; }
@@ -397,7 +397,22 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
     align-items: center;
     justify-content: space-between;
   }
-  .hdr-center { display: none; }
+  .hdr-center {
+    display: block;
+    text-align: center;
+    margin: 4px 0;
+  }
+  .hdr-center h1 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .hdr-center p {
+    font-size: .8rem;
+    opacity: .92;
+    font-style: italic;
+    margin-top: 2px;
+  }
   .hdr-right {
     width: 100%;
     display: flex;
@@ -603,7 +618,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
     <!-- Center: Title -->
     <div class="hdr-center">
       <h1>From Research Topic to Published-Grade Draft</h1>
-      <p>AI-Assisted Literature Review Draft · Vancouver Citations · PDF Export · Reference Validation</p>
+      <p>This application is dedicated to my mentor, Prof. Dr. Abdel Hamid Attia</p>
     </div>
     <!-- Right: Author -->
     <div class="hdr-right">
