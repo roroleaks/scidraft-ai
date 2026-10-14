@@ -703,24 +703,6 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       </label>
     </div>
 
-    <!-- Collapsible S2 API key settings -->
-    <div style="margin-top:8px;margin-bottom:14px">
-      <button type="button" onclick="toggleS2Settings()" style="background:none;border:none;color:var(--accent);font-size:.82rem;font-weight:600;cursor:pointer;padding:4px 0;display:inline-flex;align-items:center;gap:6px">
-        <span id="s2-toggle-icon">⚙️</span>
-        <span>Semantic Scholar (S2) API Settings</span>
-        <span class="source-badge source-s2" style="font-size:.68rem">S2 Key Active</span>
-      </button>
-      <div id="s2-settings-panel" class="hidden" style="margin-top:8px;padding:12px 14px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
-        <label style="display:block;font-size:.78rem;font-weight:700;color:var(--ink);margin-bottom:4px">Semantic Scholar API Key (x-api-key)</label>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <input type="password" id="s2-api-key-input" value="s2k-0rcC3ztnxRdNGsOKL1SNvwbOPnSaRh4qHBT9qe7A" style="flex:1;min-width:240px;padding:7px 10px;font-family:monospace;font-size:.8rem;border:1px solid var(--border);border-radius:6px" placeholder="s2k-..." />
-          <button type="button" class="alert-btn alert-btn-primary" onclick="testS2ApiKey()" style="padding:6px 12px;font-size:.78rem">🔑 Test Key</button>
-          <button type="button" class="alert-btn alert-btn-secondary" onclick="toggleShowS2Key()" id="s2-show-btn" style="padding:6px 12px;font-size:.78rem">👁️ Show</button>
-        </div>
-        <div id="s2-key-status" style="margin-top:6px;font-size:.76rem;color:var(--muted)">Key verified &amp; active (Higher S2 rate limits enabled).</div>
-      </div>
-    </div>
-
     <div class="row" style="margin-top:20px">
       <button class="primary btn-main-cta" id="start-btn" onclick="runPipeline()">
         🔍 Fetch Literature &amp; Build Paper Draft ➜
@@ -936,65 +918,6 @@ function selectSearchEngine(el, mode){
   const span = el.querySelector('span');
   if (span && !span.textContent.includes('✓')) span.textContent += ' ✓';
   STATE.searchSource = mode;
-}
-
-function toggleS2Settings(){
-  const panel = document.getElementById('s2-settings-panel');
-  const icon = document.getElementById('s2-toggle-icon');
-  if(!panel) return;
-  const isHidden = panel.classList.contains('hidden');
-  if(isHidden){
-    panel.classList.remove('hidden');
-    if(icon) icon.textContent = '▲';
-  } else {
-    panel.classList.add('hidden');
-    if(icon) icon.textContent = '⚙️';
-  }
-}
-
-function toggleShowS2Key(){
-  const inp = document.getElementById('s2-api-key-input');
-  const btn = document.getElementById('s2-show-btn');
-  if(!inp) return;
-  if(inp.type === 'password'){
-    inp.type = 'text';
-    if(btn) btn.textContent = '🔒 Hide';
-  } else {
-    inp.type = 'password';
-    if(btn) btn.textContent = '👁️ Show';
-  }
-}
-
-async function testS2ApiKey(){
-  const inp = document.getElementById('s2-api-key-input');
-  const statusEl = document.getElementById('s2-key-status');
-  const key = inp ? inp.value.trim() : '';
-  if(!key){
-    if(statusEl) statusEl.innerHTML = '<span style="color:var(--warn);font-weight:700">⚠️ Please enter an S2 API key.</span>';
-    return;
-  }
-  try {
-    let res;
-    try {
-      res = await fetch(`/api/s2?query=medicine&limit=1&fields=paperId,title&key=${encodeURIComponent(key)}`);
-      if(res.status === 404) throw new Error('Proxy 404');
-    } catch(err) {
-      res = await fetch('https://api.semanticscholar.org/graph/v1/paper/search?query=medicine&limit=1&fields=paperId,title', {
-        headers: { 'x-api-key': key }
-      });
-    }
-    if(res.ok){
-      S2_API_KEY = key;
-      if(statusEl) statusEl.innerHTML = '<span style="color:var(--good);font-weight:700">✔ API Key Verified! High-rate Semantic Scholar access active.</span>';
-    } else if(res.status === 429){
-      S2_API_KEY = key;
-      if(statusEl) statusEl.innerHTML = '<span style="color:var(--warn);font-weight:700">⚠️ Key recognized but temporarily rate-limited (wait 2 seconds).</span>';
-    } else {
-      if(statusEl) statusEl.innerHTML = `<span style="color:var(--danger);font-weight:700">❌ Semantic Scholar returned HTTP ${res.status}. Check API key.</span>`;
-    }
-  } catch(e) {
-    if(statusEl) statusEl.innerHTML = `<span style="color:var(--danger)">❌ Connection error: ${esc(e.message)}</span>`;
-  }
 }
 
 function getSourceBadgeHTML(paper){
@@ -1358,25 +1281,52 @@ function resetApp(){
 // LITERATURE FETCH (EUROPE PMC & SEMANTIC SCHOLAR)
 // ═══════════════════════════════════════════════════════════════
 
+function cleanQueryKeywords(topic){
+  if(!topic) return '';
+  return topic
+    .replace(/\b(role\s+of|the\s+role\s+of|effect\s+of|impact\s+of|efficacy\s+of|comparison\s+of|compared\s+with|versus|vs\.?|in\s+the|in|of|and|for|with|a|an|the)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function fetchEuropePMC(topic, pageSize, yearRange, signal){
   const currentYear = new Date().getFullYear();
-  let queryStr = topic;
-  if(yearRange < 99){
-    const fromYear = currentYear - yearRange;
-    queryStr += ` AND (FIRST_PDATE:[${fromYear}-01-01 TO ${currentYear}-12-31])`;
+  const buildUrl = (q) => {
+    let queryStr = q;
+    if(yearRange < 99){
+      const fromYear = currentYear - yearRange;
+      queryStr += ` AND (FIRST_PDATE:[${fromYear}-01-01 TO ${currentYear}-12-31])`;
+    }
+    return `${EPMC}?query=${encodeURIComponent(queryStr)}&format=json&pageSize=${pageSize}&resultType=core`;
+  };
+
+  const queries = [topic];
+  const cleaned = cleanQueryKeywords(topic);
+  if(cleaned && cleaned.toLowerCase() !== topic.toLowerCase()){
+    queries.push(cleaned);
   }
-  const url = `${EPMC}?query=${encodeURIComponent(queryStr)}&format=json&pageSize=${pageSize}&resultType=core`;
-  const res = await fetch(url, { signal });
-  if(!res.ok){
-    const err = new Error(`Europe PMC HTTP ${res.status}`);
-    err.status = res.status;
-    err.engine = 'Europe PMC';
-    throw err;
+
+  let lastHitCount = 0;
+  for(const q of queries){
+    if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const url = buildUrl(q);
+    const res = await fetch(url, { signal });
+    if(!res.ok){
+      const err = new Error(`Europe PMC HTTP ${res.status}`);
+      err.status = res.status;
+      err.engine = 'Europe PMC';
+      throw err;
+    }
+    const json = await res.json();
+    const parsed = parsePapers(json.resultList?.result||[]);
+    lastHitCount = json.hitCount || 0;
+    if(parsed.length > 0){
+      parsed.forEach(p => { p.source = 'epmc'; p.sources = ['Europe PMC']; });
+      return { results: parsed, hitCount: lastHitCount };
+    }
   }
-  const json = await res.json();
-  const parsed = parsePapers(json.resultList?.result||[]);
-  parsed.forEach(p => { p.source = 'epmc'; p.sources = ['Europe PMC']; });
-  return { results: parsed, hitCount: json.hitCount || 0 };
+
+  return { results: [], hitCount: lastHitCount };
 }
 
 function parseAuthors(item){
@@ -1462,60 +1412,76 @@ async function fetchSemanticScholar(topic, pageSize, yearRange, signal, apiKey){
   const key = apiKey || S2_API_KEY;
   const currentYear = new Date().getFullYear();
   const fields = 'paperId,title,authors,year,abstract,venue,publicationVenue,journal,externalIds,openAccessPdf,citationCount,publicationTypes,fieldsOfStudy';
-  let queryParams = `query=${encodeURIComponent(topic)}&limit=${pageSize}&fields=${encodeURIComponent(fields)}`;
-  if(yearRange < 99){
-    const fromYear = currentYear - yearRange;
-    queryParams += `&year=${fromYear}-${currentYear}`;
+
+  const queries = [topic];
+  const cleaned = cleanQueryKeywords(topic);
+  if(cleaned && cleaned.toLowerCase() !== topic.toLowerCase()){
+    queries.push(cleaned);
   }
 
-  // Dual-target endpoints: 1) Same-origin /api/s2 proxy (bypasses browser adblockers/CORS), 2) Direct S2 API
-  const endpoints = [
-    { url: `/api/s2?${queryParams}`, isProxy: true },
-    { url: `${S2_API_BASE}/paper/search?${queryParams}`, isProxy: false }
-  ];
-
   let lastErr = null;
-  for(const ep of endpoints){
-    if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-    for(let attempt = 0; attempt <= 2; attempt++){
+  let lastHitCount = 0;
+
+  for(const q of queries){
+    let queryParams = `query=${encodeURIComponent(q)}&limit=${pageSize}&fields=${encodeURIComponent(fields)}`;
+    if(yearRange < 99){
+      const fromYear = currentYear - yearRange;
+      queryParams += `&year=${fromYear}-${currentYear}`;
+    }
+
+    const endpoints = [
+      { url: `/api/s2?${queryParams}`, isProxy: true },
+      { url: `${S2_API_BASE}/paper/search?${queryParams}`, isProxy: false }
+    ];
+
+    for(const ep of endpoints){
       if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      try {
-        const headers = {};
-        if(key) headers['x-api-key'] = key;
-        const res = await fetch(ep.url, { headers, signal });
-        if(!res.ok){
-          if(res.status === 429 && attempt < 2){
+      for(let attempt = 0; attempt <= 2; attempt++){
+        if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        try {
+          const headers = {};
+          if(key) headers['x-api-key'] = key;
+          const res = await fetch(ep.url, { headers, signal });
+          if(!res.ok){
+            if(res.status === 429 && attempt < 2){
+              await abortableSleep(1400, signal);
+              continue;
+            }
+            if(res.status === 404 && ep.isProxy) break;
+            const err = new Error(`Semantic Scholar HTTP ${res.status}`);
+            err.status = res.status;
+            err.engine = 'Semantic Scholar';
+            throw err;
+          }
+          const json = await res.json();
+          const parsed = parseS2Papers(json.data || []);
+          lastHitCount = json.total || parsed.length;
+          if(parsed.length > 0){
+            return { results: parsed, hitCount: lastHitCount };
+          }
+          break;
+        } catch(err){
+          if(err.name === 'AbortError') throw err;
+          lastErr = err;
+          if(ep.isProxy && (err instanceof TypeError || err.status === 404)){
+            break;
+          }
+          if(attempt < 2 && (err.status === 429 || !err.status)){
             await abortableSleep(1400, signal);
             continue;
           }
-          if(res.status === 404 && ep.isProxy) break; // Proxy not present on static dev, fallback to direct
-          const err = new Error(`Semantic Scholar HTTP ${res.status}`);
-          err.status = res.status;
-          err.engine = 'Semantic Scholar';
-          throw err;
+          break;
         }
-        const json = await res.json();
-        const parsed = parseS2Papers(json.data || []);
-        return { results: parsed, hitCount: json.total || parsed.length };
-      } catch(err){
-        if(err.name === 'AbortError') throw err;
-        lastErr = err;
-        if(ep.isProxy && (err instanceof TypeError || err.status === 404)){
-          break; // Switch to direct endpoint immediately on proxy network drop
-        }
-        if(attempt < 2 && (err.status === 429 || !err.status)){
-          await abortableSleep(1400, signal);
-          continue;
-        }
-        break;
       }
+      if(lastHitCount > 0) break;
     }
   }
 
-  if(lastErr){
+  if(lastErr && lastHitCount === 0){
     lastErr.engine = 'Semantic Scholar';
     throw lastErr;
   }
+  return { results: [], hitCount: lastHitCount };
 }
 
 async function fetchPapers(topic, pageSize, yearRange, signal, sourceMode = 'both', s2Key = ''){
