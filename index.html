@@ -659,7 +659,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 
     <span class="pill">📝 Step 1 · Research Configuration</span>
     <h2 class="sec-h">Research Topic</h2>
-    <p class="hint">Enter any biomedical or scientific subject. SciDraft AI will query Europe PMC, validate each reference, score relevance, then generate a full IMRaD paper with Vancouver citations.</p>
+    <p class="hint">Enter any biomedical or scientific subject. SciDraft AI will query your selected literature databases, validate each reference, score relevance, then generate a full IMRaD paper with Vancouver citations.</p>
     <textarea id="topic-input" rows="2" placeholder="e.g. CRISPR gene editing in cancer therapy, mRNA vaccine immunogenicity, Alzheimer's tau phosphorylation…" oninput="clearStep1Alert()"></textarea>
     <div id="step1-alert" class="alert-box alert-error hidden"></div>
 
@@ -768,7 +768,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
           </defs>
         </svg>
       </div>
-      <h2 class="processing-text-primary" id="proc-msg">Connecting to Europe PMC…</h2>
+      <h2 class="processing-text-primary" id="proc-msg">Connecting to literature search engines…</h2>
       <p class="processing-text-secondary" id="proc-sub">Initialising literature search pipeline</p>
       <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
 
@@ -847,7 +847,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <!-- Tab: References -->
       <div id="tab-references" class="hidden">
         <div class="good-note" style="margin-bottom:14px">
-          ✔ All references formatted in <strong>Vancouver (ICMJE)</strong> style — validated via Europe PMC API
+          ✔ All references formatted in <strong>Vancouver (ICMJE)</strong> style · validated
         </div>
         <ol class="refs-numbered" id="refs-list"></ol>
       </div>
@@ -2166,14 +2166,16 @@ function renderPaperCards(){
       <div style="font-size:1.45rem;font-weight:700;color:var(--accent)">${p.length}</div>
       <div style="font-size:.74rem;color:var(--muted)">Unique Papers</div>
     </div>
+    ${(STATE.searchSource !== 's2' || epmcCount > 0) ? `
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
       <div style="font-size:1.45rem;font-weight:700;color:#1e40af">${epmcCount}</div>
       <div style="font-size:.74rem;color:var(--muted)">Europe PMC</div>
-    </div>
+    </div>` : ''}
+    ${(STATE.searchSource !== 'epmc' || s2Count > 0) ? `
     <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
       <div style="font-size:1.45rem;font-weight:700;color:#6d28d9">${s2Count}</div>
       <div style="font-size:.74rem;color:var(--muted)">Semantic Scholar</div>
-    </div>
+    </div>` : ''}
     ${bothCount > 0 ? `
     <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
       <div style="font-size:1.45rem;font-weight:700;color:#047857">${bothCount}</div>
@@ -2423,7 +2425,12 @@ class PaperGenerator {
     const p1=`This AI-assisted literature review draft was developed utilizing structured computational literature harvesting and evidence synthesis workflows. A comprehensive electronic search of ${dbName} was performed, accessing millions of scholarly and biomedical literature records.`;
     const p2=`2.1 Search Strategy & Duplicate Removal\n\nThe primary search query "${t}" was submitted to ${STATE.searchSource==='s2'?'the Semantic Scholar Graph API':STATE.searchSource==='both'?'the Europe PMC and Semantic Scholar APIs concurrently':'the Europe PMC REST API'}. ${yearFilter} Retrieved raw records were processed through an automated deduplication pipeline matching registered PMIDs, DOIs, Semantic Scholar corpus IDs, and normalized alphanumeric title keys, successfully identifying and excluding ${dups} redundant record${dups===1?'':'s'}. The resulting ${n} unique articles spanned publication dates from ${minY} to ${maxY}.`;
     const p3=`2.2 Study-Design Classification & Full-Text Availability\n\nEach unique study was algorithmically categorized into standardized epidemiological and experimental study designs: ${designSummary}. Full-text accessibility was evaluated based on repository indexing and open-access licensing; ${oaCount} of ${n} articles (${Math.round(oaCount/(n||1)*100)}%) provided unencumbered open-access full-text status.`;
-    const p4=`2.3 Quality Assessment & Manual Verification Warnings\n\nReference integrity was validated via Europe PMC and Semantic Scholar bibliographic resolution endpoints. Heuristic relevance scores were computed using a staged scoring model incorporating stop-word removal, multi-word phrase detection, biomedical synonym expansion, MeSH subject heading alignment, and publication recency weighting. Automated manual verification warnings were systematically flagged for records with missing DOIs/PMIDs, low heuristic relevance thresholds (<45%), brief/missing abstracts, or preprint server deposits to guide human-in-the-loop expert appraisal.`;
+    const valEndpointDesc = STATE.searchSource === 's2'
+      ? 'Semantic Scholar bibliographic resolution endpoints'
+      : STATE.searchSource === 'epmc'
+      ? 'Europe PMC bibliographic resolution endpoints'
+      : 'Europe PMC and Semantic Scholar bibliographic resolution endpoints';
+    const p4=`2.3 Quality Assessment & Manual Verification Warnings\n\nReference integrity was validated via ${valEndpointDesc}. Heuristic relevance scores were computed using a staged scoring model incorporating stop-word removal, multi-word phrase detection, biomedical synonym expansion, MeSH subject heading alignment, and publication recency weighting. Automated manual verification warnings were systematically flagged for records with missing DOIs/PMIDs, low heuristic relevance thresholds (<45%), brief/missing abstracts, or preprint server deposits to guide human-in-the-loop expert appraisal.`;
     return [p1,p2,p3,p4].join('\n\n');
   }
   generateResults(){
@@ -2462,8 +2469,8 @@ class PaperGenerator {
     const mt=['Notably,','Of considerable relevance,','Furthermore,','Importantly,'];
     let para2=`The mechanistic and clinical dimensions revealed through this evidence synthesis are particularly salient. `;
     mech.slice(0,3).forEach(({s,i},idx)=>{ para2+=`${mt[idx]||'Additionally,'} ${lc(s)} ${this.cite(i)} `; });
-    para2+=`These findings underscore the necessity of integrating mechanistic insights with translational research.`;
-    const para3=`Methodological limitations & manual verification considerations: (1) automated retrieval relies on Europe PMC indexation, which may omit non-indexed journals; (2) algorithmic study-design classification is heuristic and warrants manual appraisal; (3) study heterogeneity and limited longitudinal trials constrain definitive clinical causality; and (4) records flagged with manual verification warnings require expert human oversight prior to clinical implementation.`;
+    const dbIndexation = STATE.searchSource === 's2' ? 'Semantic Scholar Academic Graph indexing' : STATE.searchSource === 'both' ? 'Europe PMC and Semantic Scholar indexing' : 'Europe PMC indexation';
+    const para3=`Methodological limitations & manual verification considerations: (1) automated retrieval relies on ${dbIndexation}, which may omit non-indexed journals; (2) algorithmic study-design classification is heuristic and warrants manual appraisal; (3) study heterogeneity and limited longitudinal trials constrain definitive clinical causality; and (4) records flagged with manual verification warnings require expert human oversight prior to clinical implementation.`;
     const para4=`Notwithstanding these considerations, this literature review draft provides an evidence-based foundation for researchers and clinicians. Prospective multicenter investigations and standardized reporting protocols will further advance knowledge translation in ${t}.`;
     return [para1,para2,para3,para4].join('\n\n');
   }
@@ -2508,9 +2515,10 @@ function renderPaperPreview(paper){
     return `<div class="s-head">${num}. ${heading}</div>${paras}`;
   };
   const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  const srcName = STATE.searchSource === 's2' ? 'Semantic Scholar (Allen Institute for AI)' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
   document.getElementById('paper-preview').innerHTML=`
     <h1>${esc(paper.title)}</h1>
-    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: Europe PMC (EMBL-EBI) · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}</em></div>
+    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: ${srcName} · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}</em></div>
     <hr/>
     <div class="s-head">Abstract</div>
     <p><span class="ab-label">Background:</span> ${citify(esc(abs.background))}</p>
@@ -2768,7 +2776,8 @@ async function exportReferencesPDF(){
     y+=3;
     doc.setFontSize(8.5);doc.setFont('times','normal');doc.setTextColor(90,90,90);
     doc.text(`SciDraft AI · Vancouver Citation Style · Generated: ${today}`,pw/2,y,{align:'center'});y+=4.5;
-    doc.text(`Source: Europe PMC (EMBL-EBI) · ${STATE.paper.references.length} unique references (${STATE.duplicatesRemoved||0} duplicates excluded) · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=7;
+    const pdfSrc = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
+    doc.text(`Source: ${pdfSrc} · ${STATE.paper.references.length} unique references (${STATE.duplicatesRemoved||0} duplicates excluded) · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=7;
     doc.setDrawColor(15,107,107);doc.setLineWidth(.5);doc.line(ml,y,pw-mr,y);y+=6;
 
     // Column headers
@@ -2965,7 +2974,8 @@ async function runPipeline(){
       const unverifiedCount = STATE.papers.length - verifiedCount;
       if (apiErrorCount > 0 || unverifiedCount > 0) {
         valAlert.className = 'alert-box alert-warn';
-        let detailMsg = `Europe PMC verified ${verifiedCount} of ${STATE.papers.length} papers.`;
+        const verifierName = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Cross-engine validation' : 'Europe PMC';
+        let detailMsg = `${verifierName} verified ${verifiedCount} of ${STATE.papers.length} papers.`;
         if (apiErrorCount > 0) {
           detailMsg += ` ${apiErrorCount} reference check(s) encountered temporary API rate or connection limits during verification.`;
         }
