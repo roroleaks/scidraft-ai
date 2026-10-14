@@ -1533,10 +1533,24 @@ function deduplicatePapers(rawPapers){
 
   for(const p of rawPapers){
     const keys = [];
-    if(p.pmid && String(p.pmid).trim()) keys.push('pmid:' + String(p.pmid).trim());
-    if(p.doi && String(p.doi).trim()) keys.push('doi:' + String(p.doi).toLowerCase().trim());
-    const normTitle = (p.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if(normTitle.length > 10) keys.push('title:' + normTitle);
+    if(p.pmid && String(p.pmid).trim()) {
+      keys.push('pmid:' + String(p.pmid).trim());
+    }
+    if(p.doi && String(p.doi).trim()) {
+      const cleanDoi = String(p.doi).toLowerCase().trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '');
+      if(cleanDoi) keys.push('doi:' + cleanDoi);
+    }
+    const cleanTitle = (p.title || '')
+      .toLowerCase()
+      .replace(/<[^>]+>/g, '')
+      .replace(/&(?:amp|quot|lt|gt|#\d+);/g, ' ')
+      .replace(/[^a-z0-9]/g, '');
+    if(cleanTitle.length > 10) {
+      keys.push('title:' + cleanTitle);
+    }
+    if(p.s2PaperId && String(p.s2PaperId).trim()) {
+      keys.push('s2:' + String(p.s2PaperId).trim());
+    }
 
     let existing = null;
     for(const k of keys){
@@ -1587,6 +1601,92 @@ function deduplicatePapers(rawPapers){
 
   const unique = [...new Set(seen.values())];
   return { unique, dupCount, mergedCount };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FLEXIBLE RATIO ORCHESTRATION & DYNAMIC DEFICIT BALANCING
+// ═══════════════════════════════════════════════════════════════
+function balanceAndCapRatio(uniquePapers, targetCount, sourceMode = 'both'){
+  if(sourceMode !== 'both' || uniquePapers.length <= targetCount){
+    const selected = uniquePapers.slice(0, targetCount);
+    return {
+      selected,
+      stats: {
+        bothCount: selected.filter(p => p.source === 'both').length,
+        epmcOnlyCount: selected.filter(p => p.source === 'epmc').length,
+        s2OnlyCount: selected.filter(p => p.source === 's2').length,
+        targetRequested: targetCount,
+        finalCount: selected.length,
+        deficitTransferred: 0
+      }
+    };
+  }
+
+  const bothPool = [];
+  const epmcPool = [];
+  const s2Pool = [];
+
+  for(const p of uniquePapers){
+    if(p.source === 'both') bothPool.push(p);
+    else if(p.source === 's2') s2Pool.push(p);
+    else epmcPool.push(p);
+  }
+
+  // Sort pools by citation count and publication year for highest evidentiary quality
+  const ranker = (a, b) => (b.citedBy || 0) - (a.citedBy || 0) || (b.year || 0) - (a.year || 0);
+  bothPool.sort(ranker);
+  epmcPool.sort(ranker);
+  s2Pool.sort(ranker);
+
+  const selected = [];
+  // 1. Cross-engine consensus papers take highest priority (high confidence)
+  const selectedBoth = bothPool.slice(0, targetCount);
+  selected.push(...selectedBoth);
+
+  let remaining = targetCount - selected.length;
+  let deficitTransferred = 0;
+
+  // 2. Allocate remaining slots 50/50 with dynamic deficit reallocation
+  if(remaining > 0){
+    let half = Math.ceil(remaining / 2);
+    let takeEpmc = Math.min(epmcPool.length, half);
+    let takeS2 = Math.min(s2Pool.length, remaining - takeEpmc);
+
+    // Deficit transfer: if S2 has fewer papers than its 50% share, transfer to EPMC
+    if(takeS2 < (remaining - takeEpmc) && epmcPool.length > takeEpmc){
+      const extraEpmc = Math.min(epmcPool.length - takeEpmc, remaining - (takeEpmc + takeS2));
+      takeEpmc += extraEpmc;
+      deficitTransferred += extraEpmc;
+    }
+    // Deficit transfer: if EPMC has fewer papers than its 50% share, transfer to S2
+    if(takeEpmc < half && s2Pool.length > takeS2){
+      const extraS2 = Math.min(s2Pool.length - takeS2, remaining - (takeEpmc + takeS2));
+      takeS2 += extraS2;
+      deficitTransferred += extraS2;
+    }
+
+    const eSlice = epmcPool.slice(0, takeEpmc);
+    const sSlice = s2Pool.slice(0, takeS2);
+
+    // Interleave so the user gets an equitable mix throughout the review container
+    let i = 0, j = 0;
+    while(i < eSlice.length || j < sSlice.length){
+      if(i < eSlice.length) selected.push(eSlice[i++]);
+      if(j < sSlice.length) selected.push(sSlice[j++]);
+    }
+  }
+
+  return {
+    selected,
+    stats: {
+      bothCount: selected.filter(p => p.source === 'both').length,
+      epmcOnlyCount: selected.filter(p => p.source === 'epmc').length,
+      s2OnlyCount: selected.filter(p => p.source === 's2').length,
+      targetRequested: targetCount,
+      finalCount: selected.length,
+      deficitTransferred
+    }
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2756,18 +2856,21 @@ async function runPipeline(){
 
     const { results, hitCount, epmcCount, s2Count, epmcFailed, s2Failed } = await fetchPapers(topic, pgSize, yearRange, signal, searchSource, s2Key);
     const { unique, dupCount, mergedCount } = deduplicatePapers(results);
-    STATE.papers = unique;
+    const { selected, stats } = balanceAndCapRatio(unique, pgSize, searchSource);
+    STATE.papers = selected;
     STATE.duplicatesRemoved = dupCount;
     STATE.mergedCrossEngine = mergedCount;
-    STATE.sourceCounts = { epmc: epmcCount, s2: s2Count, merged: mergedCount };
+    STATE.ratioStats = stats;
+    STATE.sourceCounts = { epmc: stats.epmcOnlyCount, s2: stats.s2OnlyCount, both: stats.bothCount, rawEpmc: epmcCount, rawS2: s2Count };
 
     if(!STATE.papers.length){
       throw new Error(`No papers found for "${topic}" in the selected search engine and year range.`);
     }
 
     const mergeText = mergedCount > 0 ? ` · ${mergedCount} cross-engine match${mergedCount===1?'':'es'} unified` : '';
+    const ratioText = stats.deficitTransferred > 0 ? ` · Auto-reallocated ${stats.deficitTransferred} deficit paper${stats.deficitTransferred===1?'':'s'}` : '';
     const noteText = (epmcFailed ? ' (Europe PMC rate limited)' : '') + (s2Failed ? ' (Semantic Scholar rate limited)' : '');
-    setProc(`Found ${hitCount} records${noteText} · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed${mergeText}) · Parsing ${STATE.papers.length} unique papers in unified container…`, `Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`, 35);
+    setProc(`Found ${hitCount} records${noteText} · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed${mergeText}) · Balanced to target ${STATE.papers.length} papers in unified container${ratioText}…`, `Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`, 35);
     await sleep(250);
     if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
