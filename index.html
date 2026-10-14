@@ -2207,7 +2207,7 @@ function renderPaperCards(){
             <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
           </div>
-          <div class="r-title">${esc(paper.title)}</div>
+          <div class="r-title">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(paper.title)} <span style="font-size:.78rem;opacity:.7">↗</span></a>` : esc(paper.title)}</div>
           <div class="r-meta">
             ${esc(auth)} · ${paper.year}${paper.journal?' · <em>'+esc(paper.journal)+'</em>':''}
             ${paper.doi?'<br><span style="font-family:monospace;font-size:.76rem;color:#94a3b8">DOI: '+esc(paper.doi)+'</span>':''}
@@ -2538,6 +2538,12 @@ function renderRelevanceTab(){
     const design=classifyStudyDesign(pp);
     const ft=getFullTextInfo(pp);
     const warnInfo=getManualVerificationWarnings(pp, val, pct);
+    const paperUrl = pp.doi
+      ? (pp.doi.startsWith('http') ? pp.doi : `https://doi.org/${pp.doi.replace(/^doi:\s*/i, '')}`)
+      : pp.pmid
+      ? `https://pubmed.ncbi.nlm.nih.gov/${pp.pmid}/`
+      : pp.s2Url
+      || (pp.pmcid ? `https://europepmc.org/article/PMC/${pp.pmcid}` : null);
     return `
     <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:#fff">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
@@ -2549,7 +2555,11 @@ function renderRelevanceTab(){
             <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
           </div>
-          <div style="font-size:.9rem;font-weight:600;color:var(--accent);margin-bottom:3px">${esc(pp.title)}</div>
+          <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">
+            ${paperUrl
+              ? `<a href="${esc(paperUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(pp.title)} <span style="font-size:.78rem;opacity:.85">↗</span></a>`
+              : `<span style="color:var(--accent)">${esc(pp.title)}</span>`}
+          </div>
           <div style="font-size:.8rem;color:var(--muted)">${esc(auth)} · ${pp.year}${pp.journal?' · <em>'+esc(pp.journal)+'</em>':''}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
