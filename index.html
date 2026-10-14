@@ -887,7 +887,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 // ═══════════════════════════════════════════════════════════════
 const EPMC = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
 const S2_API_BASE = 'https://api.semanticscholar.org/graph/v1';
-let S2_API_KEY = 's2k-0rcC3ztnxRdNGsOKL1SNvwbOPnSaRh4qHBT9qe7A';
+let S2_API_KEY = '';
 
 let STATE = {
   topic: '',
@@ -2885,9 +2885,7 @@ async function runPipeline(){
     // ── Fetch ──────────────────────────────────────────────────────
     const checkedRadio = document.querySelector('input[name="searchengine"]:checked');
     const searchSource = checkedRadio ? checkedRadio.value : (STATE.searchSource || 'both');
-    STATE.searchSource = searchSource;
-    const s2Key = (document.getElementById('s2-api-key-input')?.value || S2_API_KEY || '').trim();
-    if(s2Key) S2_API_KEY = s2Key;
+    const s2Key = S2_API_KEY || '';
 
     const engineName = searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : searchSource === 's2' ? 'Semantic Scholar' : 'Europe PMC';
     setProc(`Connecting to ${engineName}…`, 'Initialising literature search pipeline', 5);
