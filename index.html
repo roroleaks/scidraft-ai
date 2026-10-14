@@ -1,0 +1,2489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SciDraft AI — AI-Assisted Literature Review Draft</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+/* ═══════════════════════════════════════════════════
+   ROOT & TOKENS  (matches AIMed globals.css exactly)
+═══════════════════════════════════════════════════ */
+:root {
+  --bg:           #f6f8fa;
+  --card:         #fff;
+  --ink:          #1a2332;
+  --muted:        #5a6a7e;
+  --accent:       #0f6b6b;
+  --accent-light: #e3f2f2;
+  --warn:         #b45309;
+  --warn-bg:      #fef3c7;
+  --good:         #15803d;
+  --good-bg:      #ecfdf5;
+  --border:       #d8dee6;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ═══════════════════════════════════════════════════
+   HEADER  — exact AIMed style
+═══════════════════════════════════════════════════ */
+.hdr {
+  background: linear-gradient(135deg, #0f6b6b, #0a4a4a);
+  color: #fff;
+  padding: 22px 20px;
+}
+.hdr-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  max-width: 1100px; margin: 0 auto; gap: 20px;
+}
+.hdr-left  { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.hdr-center { flex: 1; text-align: center; }
+.hdr-center h1 { font-size: 1.35rem; font-weight: 600; margin-bottom: 4px; }
+.hdr-center p  { opacity: .88; font-size: .9rem; margin-top: 4px; }
+.hdr-right { flex-shrink: 0; }
+.lens-icon { color: #fff; opacity: .95; flex-shrink: 0; }
+.title-main { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; color: #fff; display: flex; align-items: center; }
+.version-badge {
+  display: inline-block;
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+  color: #fff; border-radius: 999px; padding: 2px 8px;
+  font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+  margin-left: 8px; vertical-align: middle;
+}
+.author-name {
+  display: flex; align-items: center; gap: 10px;
+  font-size: .95rem; font-weight: 500; color: rgba(255,255,255,.95);
+  font-style: italic; white-space: nowrap;
+}
+.author-photo {
+  width: 42px; height: 42px; border-radius: 50%;
+  object-fit: cover; border: 2px solid rgba(255,255,255,.4);
+}
+
+/* ═══════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════ */
+footer {
+  background: #0a4a4a; color: rgba(255,255,255,.75);
+  font-size: .8rem; text-align: center;
+  padding: 14px 20px; line-height: 1.6;
+  margin-top: auto;
+}
+footer a { color: rgba(255,255,255,.9); }
+
+/* ═══════════════════════════════════════════════════
+   LAYOUT
+═══════════════════════════════════════════════════ */
+.solo { max-width: 960px; margin: 22px auto; padding: 0 16px; width: 100%; flex: 1; }
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 22px; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+
+/* ═══════════════════════════════════════════════════
+   PIPELINE STEPPER  (exact AIMed style)
+═══════════════════════════════════════════════════ */
+.pipeline-stepper {
+  display: flex; gap: 0; margin-bottom: 22px;
+  border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.pipeline-step-item {
+  flex: 1; padding: 10px 14px;
+  border-right: 1px solid var(--border); background: #f8fafb;
+}
+.pipeline-step-item:last-child { border-right: none; }
+.pipeline-step-item.active { background: var(--accent-light); }
+.pipeline-step-item.done   { background: var(--good-bg); }
+.pipeline-step-tag {
+  font-size: .7rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; display: block; margin-bottom: 3px;
+}
+.pipeline-step-tag.active { color: var(--accent); }
+.pipeline-step-tag.done   { color: var(--good); }
+.pipeline-step-tag.muted  { color: var(--muted); }
+.pipeline-step-title { font-size: .82rem; font-weight: 600; color: var(--ink); }
+.pipeline-step-item:not(.active):not(.done) .pipeline-step-title { color: var(--muted); }
+
+/* ═══════════════════════════════════════════════════
+   FORMS
+═══════════════════════════════════════════════════ */
+.pill {
+  display: inline-block; font-size: .72rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent); background: var(--accent-light);
+  border-radius: 999px; padding: 4px 12px; margin-bottom: 10px;
+}
+.sec-h { font-size: 1rem; font-weight: 700; margin: 16px 0 8px; color: var(--ink); }
+.hint  { color: var(--muted); font-size: .9rem; margin-bottom: 10px; line-height: 1.5; }
+textarea, input[type="text"], select {
+  width: 100%; padding: 10px 14px; font-size: 1rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  font-family: inherit; line-height: 1.5; background: #fff; color: var(--ink);
+  transition: border-color .15s;
+}
+textarea { resize: vertical; }
+textarea:focus, input:focus, select:focus {
+  outline: 2px solid var(--accent); border-color: transparent;
+}
+button.primary {
+  background: var(--accent); color: #fff; border: none;
+  border-radius: 8px; padding: 11px 22px;
+  font-size: .96rem; font-weight: 600; cursor: pointer;
+  min-height: 44px; display: inline-flex; align-items: center;
+  justify-content: center; gap: 8px; transition: background .15s;
+  font-family: inherit;
+}
+button.primary:hover { background: #0b5555; }
+button.primary:disabled { opacity: .55; cursor: not-allowed; }
+button.secondary {
+  background: #fff; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 9px 16px; font-size: .88rem; font-weight: 600;
+  cursor: pointer; min-height: 42px; display: inline-flex;
+  align-items: center; gap: 6px; transition: background .15s; font-family: inherit;
+}
+button.secondary:hover { background: var(--accent-light); }
+button.secondary:disabled { opacity: .55; cursor: not-allowed; }
+.mini-btn {
+  background: #fff; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 6px; padding: 6px 12px; font-size: .82rem; font-weight: 600;
+  cursor: pointer; min-height: 36px; display: inline-flex; align-items: center;
+  transition: background .15s; font-family: inherit;
+}
+.mini-btn:hover { background: var(--accent-light); }
+.row  { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+.chip {
+  border: 1px solid var(--accent); color: var(--accent); background: #fff;
+  border-radius: 8px; padding: 6px 12px; cursor: pointer;
+  font-size: .84rem; display: inline-flex; align-items: center;
+  transition: all .15s; font-family: inherit;
+}
+.chip:hover { background: var(--accent-light); }
+
+/* ═══════════════════════════════════════════════════
+   YEAR SLIDER
+═══════════════════════════════════════════════════ */
+.year-option, .paper-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
+.year-option:hover, .paper-option:hover { border-color: var(--accent); background: var(--accent-light); }
+.year-option.selected, .paper-option.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); font-weight: 700; }
+.year-option input[type="radio"], .paper-option input[type="radio"] { accent-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   ANIMATED PROCESSING INDICATOR  (AIMed-style SVG)
+═══════════════════════════════════════════════════ */
+.processing-indicator-container {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center;
+  padding: 30px 20px; margin: 0 auto; max-width: 100%;
+}
+.processing-animation-wrapper {
+  position: relative; width: 220px; height: 220px;
+  margin-bottom: 24px; display: flex; align-items: center; justify-content: center;
+}
+.processing-text-primary { font-size: 1.1rem; font-weight: 600; color: var(--accent); margin-bottom: 8px; max-width: 600px; line-height: 1.4; }
+.processing-text-secondary { font-size: .9rem; color: var(--muted); max-width: 500px; line-height: 1.45; }
+.prog-bar-bg { width: 280px; height: 6px; background: #edf0f4; border-radius: 999px; overflow: hidden; margin-top: 14px; }
+.prog-bar    { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s ease; }
+
+@keyframes rotate-slow    { to { transform: rotate(360deg); } }
+@keyframes rotate-reverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
+@keyframes pulse-glow     { 0%,100% { transform: scale(1); opacity: .4; } 50% { transform: scale(1.15); opacity: .8; } }
+@keyframes pulse-core     { 0%,100% { transform: scale(.95); filter: drop-shadow(0 0 4px rgba(15,107,107,.4)); } 50% { transform: scale(1.05); filter: drop-shadow(0 0 12px rgba(15,107,107,.8)); } }
+@keyframes flow-dash      { 0% { stroke-dashoffset: 24; } 100% { stroke-dashoffset: 0; } }
+@keyframes orbit-p        { 0%,100% { transform: translate(0,0); } 50% { transform: translate(6px,-8px); } }
+@keyframes orbit-i        { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-8px,6px); } }
+@keyframes orbit-c        { 0%,100% { transform: translate(0,0); } 50% { transform: translate(8px,8px); } }
+@keyframes orbit-o        { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-6px,-6px); } }
+@keyframes typing         { 50% { opacity: 0; } }
+
+.anim-rotate     { animation: rotate-slow 20s linear infinite; transform-origin: center; }
+.anim-rotate-rev { animation: rotate-reverse 15s linear infinite; transform-origin: center; }
+.anim-pulse-glow { animation: pulse-glow 3s ease-in-out infinite; transform-origin: center; }
+.anim-pulse-core { animation: pulse-core 2s ease-in-out infinite; transform-origin: center; }
+.anim-flow       { animation: flow-dash 1.5s linear infinite; }
+.anim-node-p     { animation: orbit-p 4s ease-in-out infinite; transform-origin: center; }
+.anim-node-i     { animation: orbit-i 4.5s ease-in-out infinite; transform-origin: center; }
+.anim-node-c     { animation: orbit-c 5s ease-in-out infinite; transform-origin: center; }
+.anim-node-o     { animation: orbit-o 3.5s ease-in-out infinite; transform-origin: center; }
+
+/* ═══════════════════════════════════════════════════
+   RESULTS — Paper cards
+═══════════════════════════════════════════════════ */
+.bar-bg { flex: 1; height: 9px; background: #edf0f4; border-radius: 999px; overflow: hidden; }
+.bar    { height: 100%; background: var(--accent); border-radius: 999px; }
+.score-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.score-name { width: 130px; font-size: .84rem; flex-shrink: 0; color: var(--muted); }
+.score-val  { width: 45px; text-align: right; font-size: .84rem; font-weight: 700; flex-shrink: 0; }
+
+.paper-card {
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 20px; margin-bottom: 14px; background: #fff;
+  transition: border-color .15s, box-shadow .15s;
+}
+.paper-card:hover { border-color: var(--accent); box-shadow: 0 3px 12px rgba(15,107,107,.1); }
+.paper-card .r-title { font-size: .95rem; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+.paper-card .r-meta  { font-size: .82rem; color: var(--muted); line-height: 1.45; }
+.paper-card .abstract-text { font-size: .88rem; color: var(--ink); line-height: 1.6; margin-top: 8px; }
+
+.validated-badge  { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: .72rem; font-weight: 700; }
+.badge-verified   { background: var(--good-bg); color: var(--good); }
+.badge-notfound   { background: var(--warn-bg); color: var(--warn); }
+.badge-apierror   { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+
+/* Study-design classification badges */
+.design-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 700; }
+.design-rct { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.design-meta { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+.design-cohort { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+.design-casecontrol { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+.design-cross { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+.design-exp { background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4; }
+.design-review { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.design-obs { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+
+/* Full-text availability badges */
+.ft-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 600; text-decoration: none; }
+.ft-oa { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.ft-oa:hover { background: #a7f3d0; }
+.ft-sub { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
+
+/* Manual verification warning & clean boxes */
+.manual-box-warn {
+  background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b;
+  padding: 8px 12px; border-radius: 0 6px 6px 0; margin-top: 10px; font-size: .80rem; color: #92400e;
+}
+.manual-box-ok {
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #22c55e;
+  padding: 6px 12px; border-radius: 0 6px 6px 0; margin-top: 10px; font-size: .78rem; color: #166534;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* Heuristic relevance diagnostic tags */
+.htag-container { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.htag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: .72rem; font-weight: 600; padding: 2px 8px;
+  border-radius: 6px; line-height: 1.35;
+}
+.htag-good   { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.htag-accent { background: #f0fdfa; color: #0f766e; border: 1px solid #99f6e4; }
+.htag-info   { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.htag-warn   { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+
+/* ═══════════════════════════════════════════════════
+   PERSISTENT ACTIONABLE ALERTS
+═══════════════════════════════════════════════════ */
+.alert-box {
+  border-radius: 8px; padding: 14px 18px; margin: 12px 0;
+  display: flex; flex-direction: column; gap: 8px;
+  text-align: left;
+}
+.alert-error {
+  background: #fef2f2; border: 1px solid #fecaca; border-left: 5px solid #ef4444; color: #991b1b;
+}
+.alert-warn {
+  background: #fffbeb; border: 1px solid #fde68a; border-left: 5px solid #f59e0b; color: #92400e;
+}
+.alert-info {
+  background: #f0fdfa; border: 1px solid #99f6e4; border-left: 5px solid var(--accent); color: #0f766e;
+}
+.alert-title {
+  font-size: .95rem; font-weight: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.alert-reason { font-size: .86rem; font-weight: 600; line-height: 1.45; }
+.alert-advice { font-size: .82rem; color: #475569; line-height: 1.45; }
+.alert-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.alert-btn {
+  padding: 6px 14px; border-radius: 6px; font-size: .80rem; font-weight: 600;
+  cursor: pointer; border: none; transition: all .15s; display: inline-flex; align-items: center; gap: 4px;
+}
+.alert-btn-primary { background: var(--accent); color: #fff; }
+.alert-btn-primary:hover { background: var(--accent-hover); }
+.alert-btn-secondary { background: #fff; border: 1px solid #cbd5e1; color: #334155; }
+.alert-btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
+.alert-btn-warn { background: #f59e0b; color: #fff; }
+.alert-btn-warn:hover { background: #d97706; }
+.alert-close {
+  background: none; border: none; font-size: 1.1rem; cursor: pointer; color: inherit; opacity: .7; line-height: 1;
+}
+.alert-close:hover { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════
+   ADVISORY / GOOD NOTE
+═══════════════════════════════════════════════════ */
+.advisory { background: var(--warn-bg); border-left: 4px solid var(--warn); padding: 10px 14px; border-radius: 0 8px 8px 0; margin-top: 10px; font-size: .88rem; line-height: 1.45; }
+.good-note { background: var(--good-bg); border-left: 4px solid var(--good); color: #14532d; padding: 10px 14px; border-radius: 0 8px 8px 0; margin-top: 10px; font-size: .88rem; line-height: 1.45; }
+
+/* ═══════════════════════════════════════════════════
+   PAPER PREVIEW (serif academic style)
+═══════════════════════════════════════════════════ */
+.paper-preview {
+  font-family: 'Times New Roman', Times, serif;
+  color: #111; line-height: 1.85; background: #fff;
+  padding: 2.5rem 3rem; border: 1px solid #ddd; border-radius: 8px;
+  max-height: 70vh; overflow-y: auto;
+}
+.paper-preview h1 { font-size: 1.2rem; font-weight: 700; text-align: center; margin-bottom: .5rem; }
+.paper-preview .p-meta { text-align: center; font-size: .8rem; color: #444; margin-bottom: 1rem; }
+.paper-preview hr { border: none; border-top: 1px solid #bbb; margin: 1rem 0; }
+.paper-preview .s-head { font-size: .9rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-top: 1.4rem; margin-bottom: .35rem; }
+.paper-preview p  { margin-bottom: .65rem; text-align: justify; font-size: .86rem; }
+.paper-preview .ab-label { font-weight: 700; }
+.paper-preview .kw { font-size: .8rem; font-style: italic; color: #444; }
+.paper-preview .ref-e { font-size: .78rem; margin-bottom: .35rem; color: #222; }
+.cite-num { color: #1d4ed8; font-weight: 600; font-size: .76rem; }
+
+/* scroll */
+.paper-preview::-webkit-scrollbar { width: 5px; }
+.paper-preview::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════════ */
+.tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
+.tab-btn {
+  padding: 10px 20px; font-size: .9rem; font-weight: 600; color: var(--muted);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; margin-bottom: -2px; font-family: inherit; transition: color .15s;
+}
+.tab-btn:hover { color: var(--accent); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   SECTION HIDE/SHOW
+═══════════════════════════════════════════════════ */
+.hidden { display: none !important; }
+
+/* ═══════════════════════════════════════════════════
+   STICKY BOTTOM BAR (Base Desktop)
+═══════════════════════════════════════════════════ */
+.sticky-bottom-bar {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE (Enhanced Mobile Experience < 640px)
+═══════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Header: clean stack with author photo/name neatly below logo */
+  .hdr { padding: 12px 14px; }
+  .hdr-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .hdr-left {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .hdr-center { display: none; }
+  .hdr-right {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    border-top: 1px solid rgba(255,255,255,.18);
+    padding-top: 7px;
+  }
+  .author-name {
+    font-size: .84rem;
+    gap: 8px;
+  }
+  .author-photo {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Consistent mobile card & container padding */
+  .solo {
+    padding: 0 10px;
+    margin: 12px auto;
+  }
+  .card {
+    padding: 16px 14px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+  .paper-card {
+    padding: 14px 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+
+  /* Stepper: smooth horizontal scroll without 2x2 wrapping */
+  .pipeline-stepper {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .pipeline-stepper::-webkit-scrollbar { display: none; }
+  .pipeline-step-item {
+    flex: 0 0 auto;
+    min-width: 145px;
+    scroll-snap-align: start;
+    padding: 8px 12px;
+  }
+  .pipeline-step-title {
+    font-size: .78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Selection controls: 1-column full-width tap targets */
+  #year-options, #paper-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .year-option, .paper-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 14px;
+    min-height: 44px;
+    box-sizing: border-box;
+    font-size: .92rem;
+  }
+
+  /* Main CTA & buttons full width */
+  .btn-main-cta, #start-btn, .row button {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+    justify-content: center;
+  }
+  .row {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  /* Single-page scroll for paper preview (no nested 70vh scroll trap) */
+  .paper-preview {
+    max-height: none;
+    overflow-y: visible;
+    padding: 1.25rem .95rem;
+  }
+  .paper-preview p {
+    font-size: .85rem;
+    text-align: left;
+    line-height: 1.7;
+  }
+
+  /* Sticky bottom action bar for Step 3 & Step 4 */
+  .sticky-bottom-bar {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    z-index: 100;
+    margin-left: -14px;
+    margin-right: -14px;
+    margin-bottom: -16px;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sticky-bottom-bar .btn-sticky-cta {
+    width: 100%;
+    min-height: 46px;
+    font-size: .95rem;
+    font-weight: 700;
+    justify-content: center;
+  }
+  .sticky-bottom-bar .btn-sticky-sec {
+    width: 100%;
+    min-height: 42px;
+    justify-content: center;
+    font-size: .88rem;
+  }
+
+  /* Step 4 Tabs: horizontal scrolling pill bar */
+  .tab-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    white-space: nowrap;
+    margin-bottom: 14px;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: .84rem;
+  }
+  .step4-top-btns {
+    display: none !important;
+  }
+
+  /* Summary stats on mobile: 2-column grid */
+  #summary-stats {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  #summary-stats > div {
+    min-width: 0 !important;
+    padding: 8px 10px !important;
+  }
+
+  /* Processing animation scaling */
+  .processing-indicator-container { padding: 20px 10px; }
+  .processing-animation-wrapper { width: 140px; height: 140px; margin-bottom: 16px; }
+  .prog-bar-bg { width: 100%; max-width: 260px; }
+  #proc-cancel-wrapper button { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════
+   SPINNER (for button loading)
+═══════════════════════════════════════════════════ */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; width: 16px; height: 16px; animation: spin .65s linear infinite; display: inline-block; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════
+   REFS NUMBERED
+═══════════════════════════════════════════════════ */
+.refs-numbered { margin-left: 20px; font-size: .88rem; line-height: 1.65; }
+.refs-numbered li { margin-bottom: 8px; word-break: break-word; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ══════════════════════════════════
+     HEADER  (AIMed-identical style)
+══════════════════════════════════ -->
+<header class="hdr">
+  <div class="hdr-inner">
+    <!-- Left: Logo -->
+    <div class="hdr-left">
+      <svg class="lens-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+      </svg>
+      <span class="title-main">SciDraft <span class="version-badge">AI · v2.0</span></span>
+    </div>
+    <!-- Center: Title -->
+    <div class="hdr-center">
+      <h1>From Research Topic to Published-Grade Draft</h1>
+      <p>AI-Assisted Literature Review Draft · Vancouver Citations · PDF Export · Reference Validation</p>
+    </div>
+    <!-- Right: Author -->
+    <div class="hdr-right">
+      <span class="author-name">
+        <img src="dr-raouf.jpg" alt="Dr Raouf Roshdy" class="author-photo" onerror="this.style.display='none'"/>
+        Dr Raouf Roshdy
+      </span>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════
+     MAIN
+══════════════════════════════════ -->
+<main class="solo">
+
+  <!-- ── STEP 1: CONFIGURE ──────────────────────────────── -->
+  <section id="step-1" class="card">
+    <!-- Pipeline indicator -->
+    <div class="pipeline-stepper" id="pipeline">
+      <div class="pipeline-step-item active" id="ps-1">
+        <span class="pipeline-step-tag active">Step 1 · Active</span>
+        <div class="pipeline-step-title">Topic &amp; Year Range</div>
+      </div>
+      <div class="pipeline-step-item" id="ps-2">
+        <span class="pipeline-step-tag muted">Step 2</span>
+        <div class="pipeline-step-title">Fetch &amp; Validate Papers</div>
+      </div>
+      <div class="pipeline-step-item" id="ps-3">
+        <span class="pipeline-step-tag muted">Step 3</span>
+        <div class="pipeline-step-title">Per-Paper Reports</div>
+      </div>
+      <div class="pipeline-step-item" id="ps-4">
+        <span class="pipeline-step-tag muted">Step 4</span>
+        <div class="pipeline-step-title">AI-Assisted Review Draft</div>
+      </div>
+    </div>
+
+    <span class="pill">📝 Step 1 · Research Configuration</span>
+    <h2 class="sec-h">Research Topic</h2>
+    <p class="hint">Enter any biomedical or scientific subject. SciDraft AI will query Europe PMC, validate each reference, score relevance, then generate a full IMRaD paper with Vancouver citations.</p>
+    <textarea id="topic-input" rows="2" placeholder="e.g. CRISPR gene editing in cancer therapy, mRNA vaccine immunogenicity, Alzheimer's tau phosphorylation…" oninput="clearStep1Alert()"></textarea>
+    <div id="step1-alert" class="alert-box alert-error hidden"></div>
+
+    <!-- Year range -->
+    <h2 class="sec-h" style="margin-top:18px">📅 Publication Year Range</h2>
+    <p class="hint">How many years back should we collect papers?</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px" id="year-options">
+      <label class="year-option" onclick="selectYear(this,1)">  <input type="radio" name="yrange" value="1">  <span>Last 1 year</span></label>
+      <label class="year-option" onclick="selectYear(this,2)">  <input type="radio" name="yrange" value="2">  <span>Last 2 years</span></label>
+      <label class="year-option selected" onclick="selectYear(this,5)"><input type="radio" name="yrange" value="5" checked><span>Last 5 years ✓</span></label>
+      <label class="year-option" onclick="selectYear(this,10)"> <input type="radio" name="yrange" value="10"> <span>Last 10 years</span></label>
+      <label class="year-option" onclick="selectYear(this,20)"> <input type="radio" name="yrange" value="20"> <span>Last 20 years</span></label>
+      <label class="year-option" onclick="selectYear(this,99)"> <input type="radio" name="yrange" value="99"> <span>All time</span></label>
+    </div>
+
+    <!-- Paper count -->
+    <h2 class="sec-h" style="margin-top:18px">📚 Papers to Fetch</h2>
+    <p class="hint">Select how many papers to collect, validate, and analyze:</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px" id="paper-options">
+      <label class="paper-option" onclick="selectPaperCount(this,20)"><input type="radio" name="pcount" value="20"><span>10 – 20 papers</span></label>
+      <label class="paper-option selected" onclick="selectPaperCount(this,30)"><input type="radio" name="pcount" value="30" checked><span>20 – 30 papers ✓</span></label>
+      <label class="paper-option" onclick="selectPaperCount(this,40)"><input type="radio" name="pcount" value="40"><span>30 – 40 papers</span></label>
+    </div>
+    <input type="hidden" id="page-size" value="30"/>
+
+    <div class="row" style="margin-top:20px">
+      <button class="primary btn-main-cta" id="start-btn" onclick="runPipeline()">
+        🔍 Fetch Literature &amp; Build Paper Draft ➜
+      </button>
+    </div>
+  </section>
+
+  <!-- ── STEP 2: PROCESSING ─────────────────────────────── -->
+  <section id="step-2" class="card hidden">
+    <!-- Animated SVG Indicator (AIMed style) -->
+    <div class="processing-indicator-container">
+      <div class="processing-animation-wrapper" id="proc-anim">
+        <svg viewBox="0 0 200 200" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="100" cy="100" r="70" fill="url(#radialGlow)" class="anim-pulse-glow"/>
+          <circle cx="100" cy="100" r="85" stroke="#edf5f5" stroke-width="2" stroke-dasharray="5 5"/>
+          <circle cx="100" cy="100" r="65" stroke="var(--accent)" stroke-width="1.5" stroke-opacity="0.25"/>
+          <circle cx="100" cy="100" r="65" stroke="var(--accent)" stroke-width="2" stroke-dasharray="12 12" class="anim-rotate anim-flow" stroke-linecap="round"/>
+          <g stroke="var(--accent)" stroke-width="1" stroke-opacity="0.3" class="anim-rotate-rev">
+            <line x1="100" y1="100" x2="50" y2="60"/>
+            <line x1="100" y1="100" x2="150" y2="60"/>
+            <line x1="100" y1="100" x2="140" y2="145"/>
+            <line x1="100" y1="100" x2="60" y2="140"/>
+            <line x1="50" y1="60" x2="150" y2="60"/>
+            <line x1="150" y1="60" x2="140" y2="145"/>
+            <line x1="140" y1="145" x2="60" y2="140"/>
+            <line x1="60" y1="140" x2="50" y2="60"/>
+          </g>
+          <!-- Orbiting nodes labeled: P I C O → here: S R A D (Search, Retrieve, Analyse, Draft) -->
+          <g class="anim-node-p">
+            <circle cx="50" cy="60" r="14" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+            <circle cx="50" cy="60" r="10" fill="var(--accent-light)"/>
+            <text x="50" y="64" font-size="10" font-weight="bold" fill="var(--accent)" text-anchor="middle">S</text>
+          </g>
+          <g class="anim-node-i">
+            <circle cx="150" cy="60" r="14" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+            <circle cx="150" cy="60" r="10" fill="var(--accent-light)"/>
+            <text x="150" y="64" font-size="10" font-weight="bold" fill="var(--accent)" text-anchor="middle">R</text>
+          </g>
+          <g class="anim-node-c">
+            <circle cx="140" cy="145" r="14" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+            <circle cx="140" cy="145" r="10" fill="var(--accent-light)"/>
+            <text x="140" y="149" font-size="10" font-weight="bold" fill="var(--accent)" text-anchor="middle">A</text>
+          </g>
+          <g class="anim-node-o">
+            <circle cx="60" cy="140" r="14" fill="#fff" stroke="var(--accent)" stroke-width="1.5"/>
+            <circle cx="60" cy="140" r="10" fill="var(--accent-light)"/>
+            <text x="60" y="144" font-size="10" font-weight="bold" fill="var(--accent)" text-anchor="middle">D</text>
+          </g>
+          <g class="anim-rotate" stroke-width="3" stroke-linecap="round">
+            <circle cx="100" cy="100" r="40" stroke="var(--accent)" stroke-dasharray="1 100" stroke-opacity="0.8"/>
+            <circle cx="100" cy="100" r="50" stroke="var(--accent)" stroke-dasharray="1 150" stroke-opacity="0.6"/>
+          </g>
+          <g class="anim-pulse-core">
+            <circle cx="100" cy="100" r="24" fill="#fff" stroke="var(--accent)" stroke-width="2.5"/>
+            <circle cx="100" cy="100" r="18" fill="var(--accent)"/>
+            <circle cx="100" cy="100" r="6" fill="#fff"/>
+          </g>
+          <defs>
+            <radialGradient id="radialGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+        </svg>
+      </div>
+      <h2 class="processing-text-primary" id="proc-msg">Connecting to Europe PMC…</h2>
+      <p class="processing-text-secondary" id="proc-sub">Initialising literature search pipeline</p>
+      <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar" style="width:0%"></div></div>
+
+      <!-- Cancel operation button -->
+      <div id="proc-cancel-wrapper" style="margin-top:18px">
+        <button class="alert-btn alert-btn-secondary" id="cancel-btn" onclick="cancelPipeline()">
+          ⏹ Cancel Operation
+        </button>
+      </div>
+
+      <!-- Persistent Error Box inside processing card -->
+      <div id="step2-error-box" class="alert-box alert-error hidden" style="max-width:560px;margin-top:20px;width:100%"></div>
+    </div>
+  </section>
+
+  <!-- ── STEP 3: PER-PAPER REPORTS ─────────────────────── -->
+  <section id="step-3" class="hidden">
+    <div class="card">
+      <span class="pill">📋 Step 3 · Per-Paper Analysis Report</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+        <div>
+          <h2 class="sec-h" style="margin:0">Individual Paper Reports</h2>
+          <p class="hint" style="margin:4px 0 0">Each paper is shown with its relevance score, validation status, abstract, and Vancouver reference — one by one.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span id="banner-count" style="font-size:.85rem;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <!-- Partial validation warning banner -->
+      <div id="partial-validation-alert" class="alert-box alert-warn hidden"></div>
+
+      <!-- Summary stats -->
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px" id="summary-stats"></div>
+      <!-- Per-paper cards -->
+      <div id="paper-cards"></div>
+      <!-- Sticky bottom action bar for Step 3 -->
+      <div class="sticky-bottom-bar" id="step3-actions">
+        <button class="primary btn-sticky-cta" onclick="goToStep4()">✍️ Generate Full Paper Draft &amp; Export PDFs ➜</button>
+        <button class="secondary btn-sticky-sec" onclick="resetApp()">↩ New Search</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STEP 4: PAPER DRAFT + EXPORT ──────────────────── -->
+  <section id="step-4" class="hidden">
+    <div class="card">
+      <span class="pill">📄 Step 4 · AI-Assisted Literature Review Draft</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <h2 class="sec-h" style="margin:0" id="draft-title-label">Generating draft…</h2>
+          <p class="hint" style="margin:4px 0 0">Full IMRaD structure · Vancouver citations · Ready to export</p>
+        </div>
+        <div class="step4-top-btns" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="primary" onclick="exportPaperPDF()">⬇ Download Review Draft PDF</button>
+          <button class="secondary" onclick="exportReferencesPDF()">⬇ References PDF</button>
+          <button class="secondary" onclick="resetApp()">↩ New Search</button>
+        </div>
+      </div>
+
+      <!-- Step 4 alert (PDF export failure, etc.) -->
+      <div id="step4-alert" class="alert-box alert-error hidden"></div>
+
+      <!-- Tabs -->
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('paper',this)">📄 Full Paper</button>
+        <button class="tab-btn" onclick="switchTab('references',this)">📚 Vancouver References</button>
+        <button class="tab-btn" onclick="switchTab('relevance',this)">📊 Heuristic Relevance Report</button>
+      </div>
+
+      <!-- Tab: Paper Preview -->
+      <div id="tab-paper">
+        <div class="paper-preview" id="paper-preview"></div>
+      </div>
+
+      <!-- Tab: References -->
+      <div id="tab-references" class="hidden">
+        <div class="good-note" style="margin-bottom:14px">
+          ✔ All references formatted in <strong>Vancouver (ICMJE)</strong> style — validated via Europe PMC API
+        </div>
+        <ol class="refs-numbered" id="refs-list"></ol>
+      </div>
+
+      <!-- Tab: Relevance -->
+      <div id="tab-relevance" class="hidden">
+        <div id="rel-table"></div>
+      </div>
+
+      <!-- Sticky bottom action bar for Step 4 -->
+      <div class="sticky-bottom-bar" id="step4-actions">
+        <button class="primary btn-sticky-cta" onclick="exportPaperPDF()">⬇ Download Review Draft PDF</button>
+        <button class="secondary btn-sticky-sec" onclick="exportReferencesPDF()">⬇ References PDF</button>
+        <button class="secondary btn-sticky-sec" onclick="resetApp()">↩ New Search</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════════════════════════════
+     FOOTER  (AIMed-identical style)
+══════════════════════════════════ -->
+<footer>
+  SciDraft AI v2.0 — AI-Assisted Literature Review Draft Platform ·
+  Powered by <a href="https://europepmc.org" target="_blank">Europe PMC (EMBL-EBI)</a> ·
+  Vancouver Citation Style · Zero API Key Required<br/>
+  Educational &amp; Research Use Only — always verify generated content clinically and academically. Copyright © Raouf Roshdy 2026
+</footer>
+</div><!-- .wrap -->
+
+<!-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT — Full Pipeline
+══════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const EPMC = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
+let STATE = { topic:'', papers:[], validations:[], relevance:[], relevanceDetails:[], paper:null, yearRange:5, pageSize:30, duplicatesRemoved:0 };
+let currentAbortController = null;
+
+// ═══════════════════════════════════════════════════════════════
+// UTILITY
+// ═══════════════════════════════════════════════════════════════
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function abortableSleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+    let timer = null;
+    const onAbort = () => {
+      if (timer) clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+const esc   = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const cap   = s  => s ? s[0].toUpperCase() + s.slice(1) : '';
+const lc    = s  => s ? s[0].toLowerCase() + s.slice(1) : '';
+
+function getSentences(text, n=3){ if(!text) return []; return (text.match(/[A-Z][^.!?]{15,}[.!?]/g)||[]).slice(0,n); }
+function findSentence(text,kws){ if(!text) return ''; const ss=text.match(/[^.!?]{20,}[.!?]/g)||[]; for(const kw of kws){const f=ss.find(s=>s.toLowerCase().includes(kw)); if(f&&f.trim().length>35) return f.trim();} return ss[Math.floor(ss.length/2)]?.trim()||''; }
+function lastSent(text){ if(!text) return ''; const ss=(text.match(/[^.!?]{20,}[.!?]/g)||[]); for(let i=ss.length-1;i>=0;i--){ if(ss[i].trim().length>35) return ss[i].trim(); } return ''; }
+
+// ═══════════════════════════════════════════════════════════════
+// ALERT & ERROR HANDLING HELPERS (Persistent & Actionable)
+// ═══════════════════════════════════════════════════════════════
+function clearStep1Alert(){
+  const el = document.getElementById('step1-alert');
+  if(el){ el.innerHTML = ''; el.classList.add('hidden'); }
+  const inp = document.getElementById('topic-input');
+  if(inp) inp.style.outline = '';
+}
+
+function showStep1Alert(title, reason, advice){
+  const el = document.getElementById('step1-alert');
+  if(!el) return;
+  el.className = 'alert-box alert-error';
+  el.innerHTML = `
+    <div class="alert-title">❌ ${esc(title)}</div>
+    <div class="alert-reason"><strong>Reason:</strong> ${esc(reason)}</div>
+    ${advice ? `<div class="alert-advice">💡 ${esc(advice)}</div>` : ''}
+    <div class="alert-actions">
+      <button class="alert-btn alert-btn-primary" onclick="document.getElementById('topic-input').focus()">✍️ Enter Topic</button>
+      <button class="alert-btn alert-btn-secondary" onclick="clearStep1Alert()">✕ Dismiss</button>
+    </div>
+  `;
+  el.classList.remove('hidden');
+}
+
+function showStep2Error(info){
+  const s2box = document.getElementById('step2-error-box');
+  const cancelWrap = document.getElementById('proc-cancel-wrapper');
+  const anim = document.getElementById('proc-anim');
+  if(anim) anim.style.opacity = '0.25';
+  if(cancelWrap) cancelWrap.classList.add('hidden');
+
+  document.getElementById('proc-msg').textContent = 'Pipeline Interrupted';
+  document.getElementById('proc-sub').textContent = info.shortSub || 'Search could not be completed';
+  document.getElementById('prog-bar').style.width = '0%';
+
+  if(!s2box) return;
+  s2box.className = `alert-box ${info.boxClass || 'alert-error'}`;
+  s2box.innerHTML = `
+    <div class="alert-title">${info.icon || '⚠️'} ${esc(info.title)}</div>
+    <div class="alert-reason"><strong>Reason:</strong> ${esc(info.reason)}</div>
+    ${info.advice ? `<div class="alert-advice">💡 ${esc(info.advice)}</div>` : ''}
+    <div class="alert-actions">
+      ${info.actionsHTML || `
+        <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Try Again</button>
+        <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">↩ Return to Step 1</button>
+      `}
+    </div>
+  `;
+  s2box.classList.remove('hidden');
+}
+
+function classifyPipelineError(err, topic, pageSize, yearRange){
+  if(err && (err.name === 'AbortError' || err.message === 'The user aborted a request.' || err.message === 'Aborted')){
+    return {
+      title: 'Operation Cancelled',
+      icon: '⏹',
+      boxClass: 'alert-info',
+      shortSub: 'Cancelled by user',
+      reason: 'The literature search and analysis pipeline was stopped upon request.',
+      advice: 'Your research topic and all configuration parameters have been preserved. You can resume at any time or adjust parameters.',
+      actionsHTML: `
+        <button class="alert-btn alert-btn-primary" onclick="runPipeline()">🔄 Resume Search</button>
+        <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">↩ Adjust Settings</button>
+      `
+    };
+  }
+
+  const isRateLimit = (err && (err.status === 429 || /429|rate limit/i.test(err.message)));
+  if(isRateLimit){
+    return {
+      title: 'We couldn’t complete the search.',
+      icon: '⏳',
+      boxClass: 'alert-warn',
+      shortSub: 'Europe PMC returned HTTP 429 (Rate Limit)',
+      reason: 'Europe PMC returned HTTP 429. The server is temporarily throttling high-frequency requests.',
+      advice: 'Try again in a few seconds or reduce the number of papers to minimize API load.',
+      actionsHTML: `
+        <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Try Again</button>
+        <button class="alert-btn alert-btn-warn" onclick="reducePapersAndRetry()">📉 Reduce to 20 Papers &amp; Retry</button>
+        <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">↩ Edit Settings</button>
+      `
+    };
+  }
+
+  const isNoResults = (err && /no papers found|zero results/i.test(err.message));
+  if(isNoResults){
+    return {
+      title: 'No Publications Found',
+      icon: '🔍',
+      boxClass: 'alert-warn',
+      shortSub: '0 results returned for this query and time filter',
+      reason: `Europe PMC found zero matching records for "${topic}" in the last ${yearRange < 99 ? yearRange + ' years' : 'selected timeframe'}.`,
+      advice: 'Try broadening your search keywords, using common medical synonyms, or expanding the publication year range to "All time".',
+      actionsHTML: `
+        <button class="alert-btn alert-btn-primary" onclick="expandToAllTimeAndRetry()">🌐 Search All Time</button>
+        <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">✏️ Refine Topic</button>
+      `
+    };
+  }
+
+  const isNetwork = (err && (err instanceof TypeError || /network|failed to fetch|offline|connection/i.test(err.message)));
+  if(isNetwork){
+    return {
+      title: 'Network Connection Failure',
+      icon: '🌐',
+      boxClass: 'alert-error',
+      shortSub: 'Unable to reach Europe PMC (https://www.ebi.ac.uk)',
+      reason: 'The browser could not establish a connection to Europe PMC. You may be offline, behind a strict corporate firewall, or experiencing DNS connectivity issues.',
+      advice: 'Check your internet connection, verify europepmc.org is accessible in your browser, then retry.',
+      actionsHTML: `
+        <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Retry Connection</button>
+        <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">↩ Return to Step 1</button>
+      `
+    };
+  }
+
+  return {
+    title: 'We couldn’t complete the search.',
+    icon: '❌',
+    boxClass: 'alert-error',
+    shortSub: 'Europe PMC service error',
+    reason: err && err.message ? err.message : 'An unexpected error occurred while querying the Europe PMC REST API.',
+    advice: 'Try again in a few seconds or reduce the number of papers.',
+    actionsHTML: `
+      <button class="alert-btn alert-btn-primary" onclick="retrySearch()">🔄 Try Again</button>
+      <button class="alert-btn alert-btn-warn" onclick="reducePapersAndRetry()">📉 Reduce to 20 Papers</button>
+      <button class="alert-btn alert-btn-secondary" onclick="returnToStep1FromError()">↩ Back to Step 1</button>
+    `
+  };
+}
+
+function cancelPipeline(){
+  if(currentAbortController){
+    currentAbortController.abort();
+  }
+}
+
+function retrySearch(){
+  const s2box = document.getElementById('step2-error-box');
+  if(s2box) s2box.classList.add('hidden');
+  const anim = document.getElementById('proc-anim');
+  if(anim) anim.style.opacity = '1';
+  runPipeline();
+}
+
+function reducePapersAndRetry(){
+  const paperLabels = document.querySelectorAll('.paper-option');
+  paperLabels.forEach(l => {
+    const radio = l.querySelector('input[type="radio"]');
+    if(radio && radio.value === "20"){
+      selectPaperCount(l, 20);
+    }
+  });
+  STATE.pageSize = 20;
+  retrySearch();
+}
+
+function expandToAllTimeAndRetry(){
+  const yearLabels = document.querySelectorAll('.year-option');
+  yearLabels.forEach(l => {
+    const radio = l.querySelector('input[type="radio"]');
+    if(radio && radio.value === "99"){
+      selectYear(l, 99);
+    }
+  });
+  STATE.yearRange = 99;
+  retrySearch();
+}
+
+function returnToStep1FromError(){
+  setBtnLoading(false);
+  const s2box = document.getElementById('step2-error-box');
+  if(s2box) s2box.classList.add('hidden');
+  const anim = document.getElementById('proc-anim');
+  if(anim) anim.style.opacity = '1';
+  const cancelWrap = document.getElementById('proc-cancel-wrapper');
+  if(cancelWrap) cancelWrap.classList.remove('hidden');
+
+  // Preserve user inputs in form
+  if(STATE.topic){
+    const inp = document.getElementById('topic-input');
+    if(inp && !inp.value) inp.value = STATE.topic;
+  }
+  showSection('step-1');
+  setStep(1);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+function setTopic(t){ document.getElementById('topic-input').value=t; }
+
+function selectYear(lbl, val){
+  document.querySelectorAll('.year-option').forEach(l => { 
+    l.classList.remove('selected'); 
+    const r = l.querySelector('input[type="radio"]');
+    if (r) r.checked = false;
+    const span = l.querySelector('span');
+    if (span) span.textContent = span.textContent.replace(' ✓',''); 
+  });
+  lbl.classList.add('selected');
+  const radio = lbl.querySelector('input[type="radio"]');
+  if (radio) radio.checked = true;
+  const span = lbl.querySelector('span');
+  if (span) span.textContent += ' ✓';
+  STATE.yearRange = val;
+}
+
+function selectPaperCount(lbl, val){
+  document.querySelectorAll('.paper-option').forEach(l => { 
+    l.classList.remove('selected'); 
+    const r = l.querySelector('input[type="radio"]');
+    if (r) r.checked = false;
+    const span = l.querySelector('span');
+    if (span) span.textContent = span.textContent.replace(' ✓',''); 
+  });
+  lbl.classList.add('selected');
+  const radio = lbl.querySelector('input[type="radio"]');
+  if (radio) radio.checked = true;
+  const span = lbl.querySelector('span');
+  if (span) span.textContent += ' ✓';
+  const pageInp = document.getElementById('page-size');
+  if (pageInp) pageInp.value = val;
+  STATE.pageSize = parseInt(val) || 30;
+}
+
+function setStep(n){
+  for(let i=1;i<=4;i++){
+    const el = document.getElementById(`ps-${i}`);
+    if(!el) continue;
+    const tag = el.querySelector('.pipeline-step-tag');
+    el.classList.remove('active','done');
+    if(tag) tag.classList.remove('active','done','muted');
+    if(i<n){
+      el.classList.add('done');
+      if(tag){ tag.classList.add('done'); tag.textContent=`Step ${i} ✓`; }
+    }
+    else if(i===n){
+      el.classList.add('active');
+      if(tag){ tag.classList.add('active'); tag.textContent=`Step ${i} · Active`; }
+      if(window.innerWidth <= 640){
+        el.scrollIntoView({ behavior:'smooth', inline:'center', block:'nearest' });
+      }
+    }
+    else {
+      if(tag){ tag.classList.add('muted'); tag.textContent=`Step ${i}`; }
+    }
+  }
+}
+
+function showSection(id){
+  ['step-1','step-2','step-3','step-4'].forEach(s=>{ document.getElementById(s).classList.add('hidden'); });
+  document.getElementById(id).classList.remove('hidden');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function setProc(msg, sub, pct){
+  document.getElementById('proc-msg').textContent = msg;
+  document.getElementById('proc-sub').textContent = sub || '';
+  document.getElementById('prog-bar').style.width  = (pct||0)+'%';
+}
+
+function setBtnLoading(loading){
+  const btn = document.getElementById('start-btn');
+  if(loading){
+    btn.disabled=true;
+    btn.innerHTML='<span class="spinner"></span> Processing…';
+  } else {
+    btn.disabled=false;
+    btn.innerHTML='🔍 Fetch Literature &amp; Build Paper Draft ➜';
+  }
+}
+
+function switchTab(name,btn){
+  ['paper','references','relevance'].forEach(t=>{ document.getElementById(`tab-${t}`).classList.add('hidden'); });
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.remove('hidden');
+  btn.classList.add('active');
+}
+
+function resetApp(){
+  clearStep1Alert();
+  const s2box = document.getElementById('step2-error-box');
+  if(s2box) s2box.classList.add('hidden');
+  const valNotice = document.getElementById('partial-validation-alert');
+  if(valNotice) valNotice.classList.add('hidden');
+  const s4Alert = document.getElementById('step4-alert');
+  if(s4Alert) s4Alert.classList.add('hidden');
+  const anim = document.getElementById('proc-anim');
+  if(anim) anim.style.opacity = '1';
+  const cancelWrap = document.getElementById('proc-cancel-wrapper');
+  if(cancelWrap) cancelWrap.classList.remove('hidden');
+
+  STATE = { topic:'', papers:[], validations:[], relevance:[], relevanceDetails:[], paper:null, yearRange:5, pageSize:30, duplicatesRemoved:0 };
+  setBtnLoading(false);
+  document.querySelectorAll('.paper-option').forEach(l => {
+    l.classList.remove('selected');
+    const span = l.querySelector('span');
+    if (span) span.textContent = span.textContent.replace(' ✓','');
+    const radio = l.querySelector('input[type="radio"]');
+    if (radio && radio.value === "30") {
+      l.classList.add('selected');
+      radio.checked = true;
+      if (span) span.textContent += ' ✓';
+    } else if (radio) {
+      radio.checked = false;
+    }
+  });
+  const pageInp = document.getElementById('page-size');
+  if (pageInp) pageInp.value = 30;
+  showSection('step-1'); setStep(1);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EUROPE PMC FETCH
+// ═══════════════════════════════════════════════════════════════
+async function fetchPapers(topic, pageSize, yearRange, signal){
+  const currentYear = new Date().getFullYear();
+  let queryStr = topic;
+  if(yearRange < 99){
+    const fromYear = currentYear - yearRange;
+    queryStr += ` AND (FIRST_PDATE:[${fromYear}-01-01 TO ${currentYear}-12-31])`;
+  }
+  const url = `${EPMC}?query=${encodeURIComponent(queryStr)}&format=json&pageSize=${pageSize}&resultType=core`;
+  const res = await fetch(url, { signal });
+  if(!res.ok){
+    const err = new Error(`Europe PMC HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  const json = await res.json();
+  return { results: parsePapers(json.resultList?.result||[]), hitCount: json.hitCount||0 };
+}
+
+function parseAuthors(item){
+  if(item.authorString) return item.authorString.trim();
+  if(Array.isArray(item.authorList?.author))
+    return item.authorList.author.map(a=>a.fullName||`${a.lastName??''} ${a.initials??''}`.trim()).join(', ');
+  return 'Unknown Authors';
+}
+
+function parsePapers(results){
+  return results.map(item=>({
+    title:        (item.title||'').trim().replace(/\.$/,'') || 'Untitled',
+    authors:      parseAuthors(item),
+    year:         parseInt(item.pubYear||(item.firstPublicationDate||'2000').substring(0,4))||2000,
+    abstract:     (item.abstractText||item.abstract||'').trim(),
+    journal:      (item.journalTitle||item.journal?.title||'').trim(),
+    volume:       (item.journalVolume||item.volume||'').trim(),
+    issue:        (item.issue||'').trim(),
+    pages:        (item.pageInfo||item.pages||'').trim(),
+    doi:          (item.doi||'').trim(),
+    pmid:         (item.pmid||'').trim(),
+    pmcid:        (item.pmcid||'').trim(),
+    isOpenAccess: item.isOpenAccess === 'Y' || Boolean(item.pmcid),
+    hasPDF:       item.hasPDF === 'Y',
+    pubType:      (item.pubType||'').trim(),
+    citedBy:      item.citedByCount||0,
+    meshTerms:    Array.isArray(item.meshHeadingList?.meshHeading)
+                    ? item.meshHeadingList.meshHeading.map(m=>typeof m==='string'?m:(m.descriptorName||m.meshHeading||'')).filter(Boolean)
+                    : (item.meshHeadingList?.meshHeading?.descriptorName ? [item.meshHeadingList.meshHeading.descriptorName] : []),
+    keywords:     Array.isArray(item.keywordList?.keyword)
+                    ? item.keywordList.keyword.filter(Boolean)
+                    : (item.keywordList?.keyword ? [item.keywordList.keyword] : []),
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DUPLICATE REMOVAL
+// ═══════════════════════════════════════════════════════════════
+function deduplicatePapers(rawPapers){
+  const seen = new Set();
+  const unique = [];
+  let dupCount = 0;
+  for(const p of rawPapers){
+    let key = '';
+    if(p.pmid) key = 'pmid:' + p.pmid;
+    else if(p.doi) key = 'doi:' + p.doi.toLowerCase().trim();
+    else key = 'title:' + (p.title||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+
+    if(seen.has(key)){
+      dupCount++;
+    } else {
+      seen.add(key);
+      unique.push(p);
+    }
+  }
+  return { unique, dupCount };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STUDY-DESIGN CLASSIFIER
+// ═══════════════════════════════════════════════════════════════
+function classifyStudyDesign(paper){
+  const text = `${paper.title} ${paper.abstract} ${paper.pubType||''}`.toLowerCase();
+  if(/\b(randomi[sz]ed controlled trial|clinical trial|double-blind|placebo-controlled|randomi[sz]ed trial|phase [1234]|rct)\b/.test(text)){
+    return { name:'Randomized Controlled Trial (RCT)', class:'design-rct', icon:'🧪' };
+  }
+  if(/\b(systematic review|meta-analysis|meta-analytic|prisma|systematic literature review)\b/.test(text)){
+    return { name:'Systematic Review / Meta-Analysis', class:'design-meta', icon:'📊' };
+  }
+  if(/\b(cohort study|prospective cohort|retrospective cohort|longitudinal study|follow-up study)\b/.test(text)){
+    return { name:'Cohort Study', class:'design-cohort', icon:'👥' };
+  }
+  if(/\b(case-control|case control|matched case)\b/.test(text)){
+    return { name:'Case-Control Study', class:'design-casecontrol', icon:'⚖️' };
+  }
+  if(/\b(cross-sectional|cross sectional|survey|prevalence study)\b/.test(text)){
+    return { name:'Cross-Sectional Study', class:'design-cross', icon:'📐' };
+  }
+  if(/\b(in vitro|in vivo|mouse model|murine|cell line|preclinical|animal model|rat model|transgenic|knockout|crispr-cas|xenograft)\b/.test(text)){
+    return { name:'Experimental / Preclinical Study', class:'design-exp', icon:'🔬' };
+  }
+  if(/\b(review|narrative review|overview|perspective|editorial|commentary|scoping review)\b/.test(text)){
+    return { name:'Narrative Review / Commentary', class:'design-review', icon:'📖' };
+  }
+  return { name:'Observational / Clinical Investigation', class:'design-obs', icon:'📑' };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FULL-TEXT AVAILABILITY HELPER
+// ═══════════════════════════════════════════════════════════════
+function getFullTextInfo(paper){
+  const isOA = paper.isOpenAccess || Boolean(paper.pmcid);
+  let url = null;
+  if(paper.pmcid){
+    url = `https://europepmc.org/article/PMC/${paper.pmcid}`;
+  } else if(paper.doi){
+    url = `https://doi.org/${paper.doi}`;
+  } else if(paper.pmid){
+    url = `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`;
+  }
+  return {
+    isOA,
+    label: isOA ? (paper.pmcid ? 'Open Access (PMC Full-Text)' : 'Open Access Article') : 'Abstract Only / Subscription',
+    badgeClass: isOA ? 'ft-oa' : 'ft-sub',
+    icon: isOA ? '🟢' : '🔒',
+    url
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MANUAL VERIFICATION WARNINGS
+// ═══════════════════════════════════════════════════════════════
+function getManualVerificationWarnings(paper, val, rel){
+  const warnings = [];
+  if(!val || !val.valid){
+    if(val && (val.status === 'API Error' || val.status === 'Rate Limited' || val.status === 'Network Error')){
+      warnings.push(`Secondary validation encountered ${val.status} — cross-check indexed record via linked DOI/PMID.`);
+    } else {
+      warnings.push('Not indexed in primary validation query — cross-check source metadata manually.');
+    }
+  }
+  if(!paper.doi && !paper.pmid){
+    warnings.push('Missing registered DOI and PMID identifiers — verify source publication directly.');
+  }
+  if(!paper.abstract || paper.abstract.length < 90){
+    warnings.push('Brief or missing abstract text — manual full-manuscript appraisal recommended.');
+  }
+  if(typeof rel === 'number' && rel < 45){
+    warnings.push(`Low heuristic relevance alignment (${rel}%) with topic keywords — evaluate domain fit.`);
+  }
+  if(paper.journal && /biorxiv|medrxiv|preprints|arxiv|research square|ssrn/i.test(paper.journal)){
+    warnings.push('Preprint repository deposit — verify peer-reviewed status before clinical reference.');
+  }
+  return {
+    isClean: warnings.length === 0,
+    warnings
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REFERENCE VALIDATION (Batched, Cached & Exponential Backoff)
+// ═══════════════════════════════════════════════════════════════
+const VALIDATION_CACHE = new Map();
+
+function getValidationCacheKey(paper){
+  if(paper.pmid && String(paper.pmid).trim()) return 'pmid:' + String(paper.pmid).trim();
+  if(paper.doi && String(paper.doi).trim()) return 'doi:' + String(paper.doi).toLowerCase().trim();
+  return 'title:' + String(paper.title || '').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 60);
+}
+
+function getValBadgeHTML(val){
+  if(!val) return '<span class="validated-badge badge-notfound">—</span>';
+  if(val.valid){
+    const cachedTag = val.cached ? ' <span title="Verified from in-memory cache" style="font-size:.65rem;opacity:.85">⚡</span>' : '';
+    return `<span class="validated-badge badge-verified">Verified ✔${cachedTag}</span>`;
+  }
+  if(val.status === 'API Error' || val.status === 'Rate Limited' || val.status === 'Network Error'){
+    return `<span class="validated-badge badge-apierror">${esc(val.status)}</span>`;
+  }
+  return `<span class="validated-badge badge-notfound">${esc(val.status || 'Not Found')}</span>`;
+}
+
+async function validateRef(paper, signal, maxRetries = 2){
+  const cacheKey = getValidationCacheKey(paper);
+  if(VALIDATION_CACHE.has(cacheKey)){
+    return { ...VALIDATION_CACHE.get(cacheKey), cached: true };
+  }
+
+  let q = paper.pmid ? `EXT_ID:${paper.pmid} AND SRC:MED`
+        : paper.doi  ? `DOI:"${paper.doi}"`
+        : `TITLE:"${paper.title.substring(0,50)}"`;
+  const url = `${EPMC}?query=${encodeURIComponent(q)}&format=json&pageSize=1`;
+
+  for(let attempt = 0; attempt <= maxRetries; attempt++){
+    if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    try {
+      const res = await fetch(url, { signal });
+      if(!res.ok){
+        // Exponential backoff for rate limit (429) or transient server errors (5xx)
+        if((res.status === 429 || res.status >= 500) && attempt < maxRetries){
+          const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
+          await abortableSleep(backoffMs, signal);
+          continue;
+        }
+        const failStatus = res.status === 429 ? 'Rate Limited' : 'API Error';
+        return { valid: false, status: failStatus, hitCount: 0, cached: false };
+      }
+      const json = await res.json();
+      const found = (json.hitCount || 0) > 0;
+      const result = { valid: found, status: found ? 'Verified ✔' : 'Not Found', hitCount: json.hitCount || 0, cached: false };
+      VALIDATION_CACHE.set(cacheKey, result);
+      return result;
+    } catch(err) {
+      if(err.name === 'AbortError') throw err;
+      if(attempt < maxRetries){
+        const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
+        await abortableSleep(backoffMs, signal);
+        continue;
+      }
+    }
+  }
+
+  return { valid: false, status: 'Network Error', hitCount: 0, cached: false };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STAGED HEURISTIC RELEVANCE SCORING MODEL
+// ═══════════════════════════════════════════════════════════════
+
+const STOP_WORDS = new Set([
+  'a','about','above','after','again','against','all','also','am','an','and','any','are','aren','arent',
+  'as','at','be','because','been','before','being','below','between','both','but','by','can','could',
+  'did','do','does','doing','down','during','each','few','for','from','further','had','has','have',
+  'having','he','her','here','hers','him','his','how','i','if','in','into','is','isn','isnt','it',
+  'its','itself','me','more','most','my','myself','no','nor','not','of','off','on','once','only',
+  'or','other','ought','our','ours','out','over','own','same','she','should','so','some','such',
+  'than','that','the','their','theirs','them','themselves','then','there','these','they','this',
+  'those','through','to','too','under','until','up','very','was','wasn','wasnt','we','were','weren',
+  'what','when','where','which','while','who','whom','why','with','won','wont','would','you','your',
+  'study','studies','investigation','approach','role','roles','effect','effects','based','using',
+  'toward','towards','among','between','article','paper','analysis','analyses'
+]);
+
+const BIOMEDICAL_SYNONYMS = {
+  'cancer': ['carcinoma', 'neoplasm', 'neoplasms', 'neoplastic', 'tumor', 'tumors', 'tumour', 'tumours', 'malignancy', 'malignancies', 'malignant', 'oncology', 'oncological'],
+  'tumor': ['tumour', 'neoplasm', 'carcinoma', 'cancer', 'malignancy', 'oncology'],
+  'tumour': ['tumor', 'neoplasm', 'carcinoma', 'cancer', 'malignancy', 'oncology'],
+  'neoplasm': ['cancer', 'carcinoma', 'tumor', 'malignancy', 'oncology'],
+  'crispr': ['cas9', 'cas12', 'crispr-cas', 'gene editing', 'genome editing', 'base editing', 'prime editing'],
+  'editing': ['gene editing', 'genome editing', 'modification', 'targeted editing', 'cas9'],
+  'gene editing': ['crispr', 'genome editing', 'cas9', 'genetic modification', 'base editing'],
+  'mrna': ['messenger rna', 'ribonucleic acid', 'lipid nanoparticle', 'lnp', 'mrna vaccine', 'mrna-based'],
+  'vaccine': ['vaccination', 'immunization', 'immunogenicity', 'booster', 'neutralizing antibodies', 'prophylactic'],
+  'vaccines': ['vaccine', 'vaccination', 'immunization', 'immunogenicity', 'booster'],
+  'immunogenicity': ['immune response', 'antibody response', 't-cell response', 'seroconversion', 'immunogenic', 'humoral response'],
+  'alzheimer': ['ad', 'amyloid', 'amyloid-beta', 'abeta', 'tau', 'neurodegeneration', 'neurodegenerative', 'dementia', 'presenilin'],
+  'alzheimers': ['alzheimer', 'ad', 'amyloid', 'tau', 'dementia', 'neurodegeneration'],
+  'tau': ['tau protein', 'microtubule-associated', 'p-tau', 'hyperphosphorylated', 'neurofibrillary'],
+  'dementia': ['alzheimer', 'cognitive impairment', 'cognitive decline', 'neurodegeneration'],
+  'antibiotic': ['antimicrobial', 'antibacterial', 'bactericidal', 'resistance', 'antibiotics'],
+  'resistance': ['resistant', 'multidrug-resistant', 'mdr', 'eskape', 'superbug', 'susceptibility', 'antimicrobial resistance', 'amr'],
+  'eskape': ['multidrug resistant', 'enterococcus', 'staphylococcus', 'klebsiella', 'acinetobacter', 'pseudomonas', 'enterobacter'],
+  'pathogen': ['pathogens', 'pathogenic', 'pathogenicity', 'microorganism', 'bacterial strain', 'infectious agent'],
+  'pathogens': ['pathogen', 'pathogenic', 'pathogenicity', 'microorganisms', 'bacteria'],
+  'diabetes': ['diabetic', 'glycemic', 'glycaemic', 'hyperglycemia', 'insulin', 't2d', 't1d', 'hba1c', 'pancreatic beta'],
+  'hypertension': ['high blood pressure', 'antihypertensive', 'systolic', 'diastolic', 'arterial pressure'],
+  'cardiovascular': ['cardiac', 'heart disease', 'heart failure', 'myocardial', 'atherosclerosis', 'coronary', 'cardio'],
+  'microbiome': ['microbiota', 'gut flora', 'intestinal flora', 'dysbiosis', 'bacterial flora', 'gut-brain'],
+  'microbiota': ['microbiome', 'gut flora', 'intestinal bacteria', 'dysbiosis'],
+  'gut': ['intestinal', 'gastrointestinal', 'gut-brain', 'colon', 'bowel', 'enteric'],
+  'depression': ['depressive', 'mdd', 'major depressive disorder', 'antidepressant', 'mood disorder'],
+  'mental': ['psychological', 'psychiatric', 'neuropsychiatric', 'cognitive', 'mental health'],
+  'immunotherapy': ['immune checkpoint', 'checkpoint inhibitor', 'pd-1', 'pd-l1', 'car-t', 'chimeric antigen receptor', 't-cell therapy'],
+  'pediatric': ['paediatric', 'children', 'childhood', 'pediatrics', 'infant', 'neonatal', 'adolescent'],
+  'pregnancy': ['gestation', 'gestational', 'prenatal', 'antenatal', 'maternal', 'maternity', 'obstetric', 'perinatal'],
+  'stroke': ['cerebrovascular', 'ischemic stroke', 'ischemia', 'cerebral infarction', 'thrombolysis'],
+  'obesity': ['adiposity', 'overweight', 'body mass index', 'bmi', 'bariatric', 'leptin'],
+  'covid': ['sars-cov-2', 'coronavirus', 'covid-19', 'post-covid', 'long covid'],
+  'influenza': ['flu', 'avian flu', 'h1n1', 'hemagglutinin', 'neuraminidase'],
+  'kidney': ['renal', 'nephrology', 'chronic kidney disease', 'ckd', 'glomerular', 'dialysis'],
+  'liver': ['hepatic', 'hepatitis', 'cirrhosis', 'hepatocellular', 'steatosis', 'nafld', 'nash'],
+  'genomics': ['genetic', 'genomic', 'genome', 'variant', 'mutation', 'polymorphism', 'transcriptomics', 'sequencing'],
+  'ai': ['artificial intelligence', 'machine learning', 'deep learning', 'neural network', 'computational model'],
+  'deep learning': ['machine learning', 'neural network', 'artificial intelligence', 'convolutional', 'transformer model'],
+  'drug discovery': ['virtual screening', 'molecular docking', 'lead compound', 'pharmacophore', 'drug design', 'small molecule', 'target identification'],
+  'molecular': ['macromolecular', 'biochemical', 'structural biology', 'binding affinity', 'ligand'],
+  'neurodegeneration': ['neurodegenerative', 'neuronal death', 'synaptic loss', 'alzheimer', 'parkinson', 'motor neuron'],
+  'parkinson': ['pd', 'alpha-synuclein', 'dopaminergic', 'substantia nigra', 'lewy body'],
+  'inflammation': ['inflammatory', 'proinflammatory', 'cytokine', 'interleukin', 'tnf', 'nf-kb', 'chemokine']
+};
+
+function normalizeText(str){
+  return (str||'').toLowerCase()
+    .replace(/[^\w\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTopicConcepts(topic){
+  const clean = normalizeText(topic);
+  const words = clean.split(/\s+/).filter(w => w.length > 1);
+  const contentWords = words.filter(w => !STOP_WORDS.has(w) && w.length > 2);
+  const effectiveWords = contentWords.length > 0 ? contentWords : words;
+
+  // Extract multi-word phrases (bigrams and trigrams)
+  const phrases = [];
+  for(let i = 0; i < words.length - 1; i++){
+    const bigram = `${words[i]} ${words[i+1]}`;
+    if(!STOP_WORDS.has(words[i]) || !STOP_WORDS.has(words[i+1])){
+      phrases.push(bigram);
+    }
+    if(i < words.length - 2){
+      const trigram = `${words[i]} ${words[i+1]} ${words[i+2]}`;
+      phrases.push(trigram);
+    }
+  }
+
+  // Build synonym clusters for each concept word
+  const conceptClusters = effectiveWords.map(word => {
+    const synonyms = new Set([word]);
+    if(BIOMEDICAL_SYNONYMS[word]){
+      BIOMEDICAL_SYNONYMS[word].forEach(s => synonyms.add(s.toLowerCase()));
+    }
+    return { core: word, variants: Array.from(synonyms) };
+  });
+
+  return {
+    rawTopic: topic,
+    contentWords: effectiveWords,
+    phrases,
+    conceptClusters
+  };
+}
+
+function matchTerm(text, term){
+  if(!text || !term) return false;
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`, 'i').test(text);
+}
+
+function scoreHeuristicRelevance(paper, topic){
+  const { contentWords, phrases, conceptClusters } = extractTopicConcepts(topic);
+  if(!contentWords.length) return { score: 50, explanations: ['General literature match'], titleMatch: 50, absMatch: 50, recency: 50, meshMatch: 0 };
+
+  const titleNorm = normalizeText(paper.title);
+  const absNorm   = normalizeText(paper.abstract);
+  const meshNorm  = normalizeText((paper.meshTerms||[]).concat(paper.keywords||[]).join(' '));
+
+  // Stage 1 & 2: Phrase detection with word-boundary matching
+  let titlePhraseMatches = 0;
+  let absPhraseMatches = 0;
+  phrases.forEach(phrase => {
+    if(matchTerm(titleNorm, phrase)) titlePhraseMatches++;
+    if(matchTerm(absNorm, phrase)) absPhraseMatches++;
+  });
+
+  // Stage 3 & 4: Biomedical synonym & concept expansion matching
+  let titleConceptHits = 0;
+  let absConceptHits = 0;
+  let meshConceptHits = 0;
+  const detectedConcepts = new Set();
+  let usedSynonyms = false;
+
+  conceptClusters.forEach(({ core, variants }) => {
+    let inTitle = false;
+    let inAbs = false;
+    let inMesh = false;
+
+    // Direct check
+    if(matchTerm(titleNorm, core)){ inTitle = true; detectedConcepts.add(core); }
+    if(matchTerm(absNorm, core)){ inAbs = true; detectedConcepts.add(core); }
+    if(matchTerm(meshNorm, core)){ inMesh = true; detectedConcepts.add(core); }
+
+    // Synonym check
+    for(const syn of variants){
+      if(syn === core) continue;
+      if(!inTitle && matchTerm(titleNorm, syn)){ inTitle = true; detectedConcepts.add(core); usedSynonyms = true; }
+      if(!inAbs && matchTerm(absNorm, syn)){ inAbs = true; detectedConcepts.add(core); usedSynonyms = true; }
+      if(!inMesh && matchTerm(meshNorm, syn)){ inMesh = true; detectedConcepts.add(core); usedSynonyms = true; }
+    }
+
+    if(inTitle) titleConceptHits++;
+    if(inAbs) absConceptHits++;
+    if(inMesh) meshConceptHits++;
+  });
+
+  const totalConcepts = Math.max(1, conceptClusters.length);
+  const titleRatio = titleConceptHits / totalConcepts;
+  const absRatio = absConceptHits / totalConcepts;
+  const meshRatio = meshConceptHits / totalConcepts;
+
+  // Compute component percentages
+  const titleScore = Math.min(100, Math.round(titleRatio * 75 + (titlePhraseMatches > 0 ? 25 : 0)));
+  const absScore = Math.min(100, Math.round(absRatio * 75 + (absPhraseMatches > 0 ? 25 : 0)));
+  const meshScore = Math.min(100, Math.round(meshRatio * 100));
+
+  // Recency score
+  const age = new Date().getFullYear() - (paper.year || 2000);
+  const recencyScore = age <= 3 ? 100 : age <= 7 ? 80 : age <= 12 ? 60 : 35;
+
+  // Staged weighted aggregation: Title (38%) + Abstract (32%) + MeSH/Keywords (15%) + Recency (15%)
+  let rawScore = (titleScore * 0.38) + (absScore * 0.32) + (meshScore * 0.15) + (recencyScore * 0.15);
+
+  // Concept coverage penalty for multi-concept queries:
+  if(totalConcepts >= 2 && detectedConcepts.size === 1){
+    rawScore = Math.min(rawScore, 44);
+  } else if(detectedConcepts.size === 0){
+    rawScore = Math.min(rawScore, 15);
+  }
+
+  const finalScore = Math.min(100, Math.max(5, Math.round(rawScore)));
+
+  // Generate short, precise diagnostic explanations
+  const explanations = [];
+  if(titleScore >= 65 || (titleConceptHits >= 2 && titlePhraseMatches > 0)){
+    explanations.push('High title match');
+  } else if(titleConceptHits > 0){
+    explanations.push('Title concept match');
+  } else if(absScore >= 50){
+    explanations.push('Abstract-only evidence');
+  }
+
+  if(absScore >= 60 || absPhraseMatches > 0){
+    explanations.push('Strong abstract evidence');
+  } else if(absScore >= 35){
+    explanations.push('Moderate abstract evidence');
+  }
+
+  if(age <= 3){
+    explanations.push('Recent publication');
+  }
+
+  if(meshScore >= 40 || meshConceptHits > 0){
+    explanations.push('MeSH / subject term match');
+  }
+
+  if(titlePhraseMatches > 0 || absPhraseMatches > 0){
+    explanations.push('Exact keyphrase detected');
+  }
+
+  if(totalConcepts >= 2 && detectedConcepts.size === 1){
+    explanations.unshift('Weak match: only one topic concept detected');
+  } else if(detectedConcepts.size === 0){
+    explanations.unshift('Weak match: no core topic concepts detected');
+  }
+
+  if(usedSynonyms && detectedConcepts.size > 0 && !explanations.includes('Weak match: only one topic concept detected')){
+    explanations.push('Biomedical synonym expansion');
+  }
+
+  return {
+    score: finalScore,
+    explanations: explanations.slice(0, 4),
+    titleMatch: titleScore,
+    absMatch: absScore,
+    recency: recencyScore,
+    meshMatch: meshScore,
+    detectedConceptsCount: detectedConcepts.size,
+    totalConcepts
+  };
+}
+
+function scoreRelevance(paper, topic){
+  return scoreHeuristicRelevance(paper, topic).score;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER PER-PAPER REPORT CARDS (Step 3)
+// ═══════════════════════════════════════════════════════════════
+function renderPaperCards(){
+  const p = STATE.papers, v = STATE.validations, r = STATE.relevance, rd = STATE.relevanceDetails;
+  const verified = v.filter(x=>x.valid).length;
+  const avgRel = Math.round(r.reduce((a,b)=>a+b,0)/(r.length||1));
+  const oaCount = p.filter(paper => paper.isOpenAccess || Boolean(paper.pmcid)).length;
+  const warnCount = p.filter((paper, idx) => !getManualVerificationWarnings(paper, v[idx], r[idx]).isClean).length;
+
+  // Stats banner
+  document.getElementById('banner-count').textContent =
+    `${p.length} unique papers · ${verified} verified · ${STATE.duplicatesRemoved || 0} duplicates excluded · Avg heuristic relevance: ${avgRel}%`;
+
+  document.getElementById('summary-stats').innerHTML = `
+    <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:var(--accent)">${p.length}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Unique Papers</div>
+    </div>
+    <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:#475569">${STATE.duplicatesRemoved || 0}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Duplicates Excluded</div>
+    </div>
+    <div style="background:var(--good-bg);border:1px solid var(--good);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:var(--good)">${verified}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Verified Records</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:var(--ink)">${oaCount}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Open Access</div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:var(--ink)">${avgRel}%</div>
+      <div style="font-size:.74rem;color:var(--muted)">Avg Heuristic Relevance</div>
+    </div>
+    <div style="background:var(--warn-bg);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
+      <div style="font-size:1.45rem;font-weight:700;color:var(--warn)">${warnCount}</div>
+      <div style="font-size:.74rem;color:var(--muted)">Manual Flags</div>
+    </div>`;
+
+  const container = document.getElementById('paper-cards');
+  container.innerHTML = '';
+
+  if(!p.length){
+    container.innerHTML = `<div class="advisory">⚠️ No papers found for this topic in the selected year range. Try broadening the year range or using different keywords.</div>`;
+    return;
+  }
+
+  p.forEach((paper, i)=>{
+    const rel      = r[i]||0;
+    const relObj   = (rd && rd[i]) ? rd[i] : scoreHeuristicRelevance(paper, STATE.topic);
+    const val      = v[i]||{};
+    const relColor = rel>=75?'var(--good)':rel>=50?'var(--accent)':'var(--warn)';
+    const auth     = paper.authors ? paper.authors.split(',')[0].trim()+(paper.authors.includes(',')?' et al.':'') : '—';
+    const link     = paper.doi ? `https://doi.org/${paper.doi}` : paper.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` : null;
+    const design   = classifyStudyDesign(paper);
+    const ft       = getFullTextInfo(paper);
+    const warnInfo = getManualVerificationWarnings(paper, val, rel);
+
+    const card = document.createElement('div');
+    card.className = 'paper-card';
+    card.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0">${i+1}</span>
+            ${getValBadgeHTML(val)}
+            <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
+            ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
+          </div>
+          <div class="r-title">${esc(paper.title)}</div>
+          <div class="r-meta">
+            ${esc(auth)} · ${paper.year}${paper.journal?' · <em>'+esc(paper.journal)+'</em>':''}
+            ${paper.doi?'<br><span style="font-family:monospace;font-size:.76rem;color:#94a3b8">DOI: '+esc(paper.doi)+'</span>':''}
+            ${paper.pmid?'<span style="font-family:monospace;font-size:.76rem;color:#94a3b8;margin-left:8px">PMID: '+esc(paper.pmid)+'</span>':''}
+            ${paper.pmcid?'<span style="font-family:monospace;font-size:.76rem;color:#94a3b8;margin-left:8px">PMC: '+esc(paper.pmcid)+'</span>':''}
+            ${paper.meshTerms&&paper.meshTerms.length?'<br><span style="font-size:.74rem;color:#0d9488">🏷️ MeSH: '+esc(paper.meshTerms.slice(0,3).join(', '))+'</span>':''}
+            ${paper.citedBy?'<br>🔖 Cited by '+paper.citedBy+' articles':''}
+          </div>
+        </div>
+        <!-- Heuristic Relevance score -->
+        <div style="text-align:center;flex-shrink:0;min-width:90px">
+          <div style="font-size:1.7rem;font-weight:700;color:${relColor};line-height:1">${rel}%</div>
+          <div style="font-size:.72rem;color:var(--muted)">heuristic relevance</div>
+          ${link?`<a href="${esc(link)}" target="_blank" style="font-size:.76rem;color:var(--accent);display:block;margin-top:4px">View Source →</a>`:''}
+        </div>
+      </div>
+
+      <!-- Relevance bars -->
+      <div style="margin:12px 0 8px">
+        <div class="score-row">
+          <span class="score-name">Title Match</span>
+          <div class="bar-bg"><div class="bar" style="width:${relObj.titleMatch}%;background:var(--accent)"></div></div>
+          <span class="score-val">${relObj.titleMatch}%</span>
+        </div>
+        <div class="score-row">
+          <span class="score-name">Abstract Match</span>
+          <div class="bar-bg"><div class="bar" style="width:${relObj.absMatch}%;background:var(--accent)"></div></div>
+          <span class="score-val">${relObj.absMatch}%</span>
+        </div>
+        <div class="score-row">
+          <span class="score-name">Recency Score</span>
+          <div class="bar-bg"><div class="bar" style="width:${relObj.recency}%;background:var(--accent)"></div></div>
+          <span class="score-val">${relObj.recency}%</span>
+        </div>
+        <div class="score-row">
+          <span class="score-name"><strong>Heuristic Relevance</strong></span>
+          <div class="bar-bg"><div class="bar" style="width:${rel}%;background:${relColor}"></div></div>
+          <span class="score-val" style="color:${relColor};font-weight:700">${rel}%</span>
+        </div>
+      </div>
+
+      <!-- Diagnostic Explanations Tags -->
+      <div class="htag-container">
+        ${relObj.explanations.map(exp => {
+          const cls = exp.includes('Weak') ? 'htag-warn' : (exp.includes('High') || exp.includes('Strong')) ? 'htag-good' : exp.includes('Recent') ? 'htag-accent' : 'htag-info';
+          const icon = exp.includes('Weak') ? '⚠️' : exp.includes('High') ? '🎯' : exp.includes('Strong') ? '🔬' : exp.includes('Recent') ? '📅' : exp.includes('MeSH') ? '🏷️' : '💡';
+          return `<span class="htag ${cls}">${icon} ${esc(exp)}</span>`;
+        }).join('')}
+      </div>
+
+      ${paper.abstract ? `
+      <!-- Abstract -->
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer;font-size:.84rem;color:var(--accent);font-weight:600">📖 Abstract &amp; Study Text (click to expand)</summary>
+        <p class="abstract-text">${esc(paper.abstract)}</p>
+      </details>` : '<p style="font-size:.82rem;color:var(--muted);margin-top:6px;font-style:italic">No abstract available for this record.</p>'}
+
+      <!-- Manual Verification Warnings / Status -->
+      ${warnInfo.isClean ? `
+      <div class="manual-box-ok">
+        <span>✔</span>
+        <span><strong>Manual Verification:</strong> Complete bibliographic record verified (No manual flags).</span>
+      </div>` : `
+      <div class="manual-box-warn">
+        <div style="display:flex;align-items:center;gap:6px;font-weight:700">
+          <span>⚠️</span>
+          <span>Manual Verification Warning (${warnInfo.warnings.length} flag${warnInfo.warnings.length>1?'s':''}):</span>
+        </div>
+        <ul style="margin-left:22px;margin-top:4px;line-height:1.4">
+          ${warnInfo.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}
+        </ul>
+      </div>`}
+
+      <!-- Vancouver reference -->
+      <div style="margin-top:10px;background:var(--accent-light);border-left:3px solid var(--accent);padding:8px 12px;border-radius:0 6px 6px 0;font-size:.78rem;font-family:monospace;color:var(--ink);word-break:break-word">
+        <strong style="font-family:inherit;color:var(--accent)">Vancouver Ref:</strong> ${esc(formatVancouver(paper,i+1))}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function getTitleMatch(paper, topic){
+  return scoreHeuristicRelevance(paper, topic).titleMatch;
+}
+function getAbsMatch(paper, topic){
+  return scoreHeuristicRelevance(paper, topic).absMatch;
+}
+function getRecency(paper){
+  const age = new Date().getFullYear() - (paper.year || 2000);
+  return age <= 3 ? 100 : age <= 7 ? 80 : age <= 12 ? 60 : 35;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VANCOUVER FORMATTER
+// ═══════════════════════════════════════════════════════════════
+function formatVancouver(paper, num){
+  let ref=`${num}. `;
+  if(paper.authors&&paper.authors!=='Unknown Authors'){ ref+=paper.authors.trim(); if(!ref.trimEnd().endsWith('.')) ref+='.'; ref+=' '; }
+  if(paper.title){ ref+=paper.title.trim().replace(/\.$/,'')+'. '; }
+  if(paper.journal){ ref+=paper.journal.trim()+'. '; }
+  ref+=paper.year;
+  if(paper.volume){ ref+=';'+paper.volume; if(paper.issue) ref+='('+paper.issue+')'; if(paper.pages) ref+=':'+paper.pages; }
+  ref+='.';
+  if(paper.doi)  ref+=` doi:${paper.doi}`;
+  if(paper.pmid) ref+=` PMID: ${paper.pmid}`;
+  return ref.trim();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAPER GENERATOR CLASS
+// ═══════════════════════════════════════════════════════════════
+class PaperGenerator {
+  constructor(topic, papers){ this.topic=topic; this.papers=papers; this.citMap={}; this.citCount=0; }
+
+  cite(...indices){
+    const nums=indices.filter(i=>i>=0&&i<this.papers.length).map(i=>{ if(!(i in this.citMap)) this.citMap[i]=++this.citCount; return this.citMap[i]; });
+    return nums.length?'['+[...new Set(nums)].join(',')+']':'';
+  }
+  s1(abs){ return getSentences(abs,1)[0]||''; }
+  sL(abs){ return lastSent(abs); }
+  sF(abs,kws){ return findSentence(abs,kws); }
+
+  generateTitle(){
+    return `${cap(this.topic)}: An AI-Assisted Literature Review Draft of Current Evidence, Mechanistic Insights, and Emerging Perspectives`;
+  }
+  generateAbstractObj(){
+    const p=this.papers,n=p.length;
+    const s1a=this.s1(p[0]?.abstract),s1b=this.s1(p[1]?.abstract);
+    const sLa=this.sL(p[0]?.abstract),sLb=this.sL(p[1]?.abstract);
+    const years=p.map(pp=>pp.year).filter(Boolean).sort();
+    const oaCount = p.filter(pp => pp.isOpenAccess || Boolean(pp.pmcid)).length;
+    const dups = STATE.duplicatesRemoved || 0;
+    return {
+      background: `${cap(this.topic)} has emerged as a focal area of contemporary biomedical research, attracting substantial scholarly attention owing to its multifaceted implications for human health and disease. ${s1a?cap(s1a)+' '+this.cite(0):''} ${s1b?cap(s1b)+' '+this.cite(1):''}`.trim(),
+      objective:  `This AI-assisted literature review draft aims to critically appraise and synthesize peer-reviewed evidence pertaining to ${this.topic}, with particular emphasis on mechanistic pathways, study-design classifications, and clinical implications.`,
+      methods:    `An automated literature query of the Europe PMC database was conducted (coverage: ${years[0]||'n.d.'}–${years[years.length-1]||'n.d.'}; year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}). Multi-tier duplicate removal identified and excluded ${dups} duplicate record${dups===1?'':'s'}, yielding ${n} unique peer-reviewed publications (${oaCount} open-access) evaluated for study design and relevance.`,
+      results:    `${n} unique studies across diverse study designs were included in the final synthesis. ${sLa?cap(sLa)+' '+this.cite(0):''} ${sLb?'Additionally, '+lc(sLb)+' '+this.cite(1):''}`.trim(),
+      conclusion: `Current evidence affirms that ${this.topic} constitutes a scientifically significant research domain. Standardized prospective investigations and manual expert verification are recommended prior to clinical application.`,
+    };
+  }
+  generateKeywords(){
+    const base=this.topic.split(/\s+/).filter(w=>w.length>2).map(w=>w.toLowerCase());
+    const extra=[];
+    this.papers.slice(0,3).forEach(p=>(p.keywords||[]).slice(0,2).forEach(k=>{if(k&&!extra.includes(k.toLowerCase())&&!base.includes(k.toLowerCase())) extra.push(k.toLowerCase());}));
+    return [...new Set([...base,...extra,'AI-assisted literature review','literature review draft','evidence synthesis'])].slice(0,8);
+  }
+  generateIntroduction(){
+    const p=this.papers,t=this.topic;
+    const s1a=this.s1(p[0]?.abstract),s1b=this.s1(p[1]?.abstract);
+    const para1=`${cap(t)} has attained considerable prominence as a subject of intensive biomedical inquiry, driven by its far-reaching implications across molecular biology, clinical medicine, and translational science. ${s1a?cap(s1a)+' '+this.cite(0):''} ${s1b?'Consistent with this perspective, '+lc(s1b)+' '+this.cite(1):''}`.trim();
+    const finds=[];
+    for(let i=2;i<Math.min(p.length,7);i++){const s=this.sF(p[i]?.abstract,['result','found','show','suggest','associat','effect','role','demonstrat','identif']); if(s&&s.length>40) finds.push({s,i});}
+    const tr=['Notably,','Of particular relevance,','Furthermore,','Additionally,'];
+    let para2=`Substantial research efforts have been directed toward delineating the biological and mechanistic underpinnings of ${t}. `;
+    finds.slice(0,3).forEach(({s,i},idx)=>{ para2+=`${tr[idx]||'Moreover,'} ${lc(s)} ${this.cite(i)} `; });
+    para2+=`These studies collectively illuminate the multidimensional nature of ${t}.`;
+    const gf=[];
+    for(let i=0;i<Math.min(p.length,8);i++){const s=this.sF(p[i]?.abstract,['limit','gap','future','remain unclear','warrant','further']); if(s&&s.length>35) gf.push({s,i});}
+    let para3=`Notwithstanding these advances, critical knowledge gaps persist. `;
+    if(gf[0]) para3+=`${cap(gf[0].s)} ${this.cite(gf[0].i)} `;
+    if(gf[1]) para3+=`Similarly, ${lc(gf[1].s)} ${this.cite(gf[1].i)} `;
+    para3+=`Heterogeneity in study design and limited longitudinal data have constrained definitive conclusions.`;
+    const para4=`The present AI-assisted literature review draft was undertaken to: (1) identify and appraise peer-reviewed publications on ${t} indexed within Europe PMC; (2) categorize study designs and verify full-text availability; (3) synthesize key mechanistic and clinical findings; (4) evaluate evidence consistency; and (5) generate automated verification warnings for expert review.`;
+    return [para1,para2,para3,para4].join('\n\n');
+  }
+  generateMethods(){
+    const p=this.papers,t=this.topic,n=p.length;
+    const years=p.map(pp=>pp.year).filter(Boolean);
+    const minY=Math.min(...years,2010),maxY=Math.max(...years,new Date().getFullYear());
+    const jnls=[...new Set(p.slice(0,5).map(pp=>pp.journal).filter(Boolean))];
+    const yearFilter=STATE.yearRange<99?`The search was restricted to publications from the last ${STATE.yearRange} years (${new Date().getFullYear()-STATE.yearRange}–${new Date().getFullYear()}).`:`No date restriction was applied.`;
+    const dups = STATE.duplicatesRemoved || 0;
+    const oaCount = p.filter(pp => pp.isOpenAccess || Boolean(pp.pmcid)).length;
+    
+    // Calculate design breakdown
+    const designs = {};
+    p.forEach(pp => {
+      const d = classifyStudyDesign(pp).name;
+      designs[d] = (designs[d] || 0) + 1;
+    });
+    const designSummary = Object.entries(designs).map(([k,v]) => `${k} (n=${v})`).join(', ');
+
+    const p1=`This AI-assisted literature review draft was developed utilizing structured computational literature harvesting and evidence synthesis workflows. A comprehensive electronic search of the Europe PMC (European PubMed Central) database was performed, accessing over 40 million biomedical literature records.`;
+    const p2=`2.1 Search Strategy & Duplicate Removal\n\nThe primary search query "${t}" was submitted to the Europe PMC REST API (resultType: core). ${yearFilter} Retrieved raw records were processed through an automated deduplication pipeline matching registered PMIDs, DOIs, and normalized alphanumeric title keys, successfully identifying and excluding ${dups} redundant record${dups===1?'':'s'}. The resulting ${n} unique articles spanned publication dates from ${minY} to ${maxY}.`;
+    const p3=`2.2 Study-Design Classification & Full-Text Availability\n\nEach unique study was algorithmically categorized into standardized epidemiological and experimental study designs: ${designSummary}. Full-text accessibility was evaluated based on Europe PMC repository indexing and open-access licensing; ${oaCount} of ${n} articles (${Math.round(oaCount/(n||1)*100)}%) provided unencumbered open-access full-text status.`;
+    const p4=`2.3 Quality Assessment & Manual Verification Warnings\n\nReference integrity was validated via Europe PMC PMID/DOI resolution endpoints. Heuristic relevance scores were computed using a staged scoring model incorporating stop-word removal, multi-word phrase detection, biomedical synonym expansion, MeSH subject heading alignment, and publication recency weighting. Automated manual verification warnings were systematically flagged for records with missing DOIs/PMIDs, low heuristic relevance thresholds (<45%), brief/missing abstracts, or preprint server deposits to guide human-in-the-loop expert appraisal.`;
+    return [p1,p2,p3,p4].join('\n\n');
+  }
+  generateResults(){
+    const p=this.papers,t=this.topic,n=p.length;
+    const withAbs=p.filter(pp=>pp.abstract&&pp.abstract.length>50);
+    const years=p.map(pp=>pp.year).filter(Boolean);
+    const avgY=years.length?Math.round(years.reduce((a,b)=>a+b,0)/years.length):2020;
+    const oaCount=p.filter(pp=>pp.isOpenAccess||Boolean(pp.pmcid)).length;
+    
+    const designs={};
+    p.forEach(pp=>{ const d=classifyStudyDesign(pp).name; designs[d]=(designs[d]||0)+1; });
+    const topDesigns=Object.entries(designs).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k} (n=${v})`).join(', ');
+
+    let p1=`3.1 Overview of Included Studies & Study Designs\n\nFollowing automated deduplication (${STATE.duplicatesRemoved||0} duplicates excluded), ${n} unique publications satisfied all synthesis criteria. Publication years ranged between ${Math.min(...years,2000)} and ${Math.max(...years,2026)} (mean publication year: ${avgY}). Of the ${n} articles, ${withAbs.length} (${Math.round(withAbs.length/n*100)}%) featured full abstract texts, and ${oaCount} (${Math.round(oaCount/(n||1)*100)}%) provided full-text open access. Classified study designs were predominantly represented by ${topDesigns}.`;
+    let p2=`3.2 Key Findings from Primary Literature\n\n`;
+    p.slice(0,Math.min(n,15)).forEach((pp,i)=>{
+      const hl=this.sF(pp.abstract,['result','found','show','demonstrat','reveal','suggest','identif','observ','conclud']);
+      const auth=pp.authors?pp.authors.split(',')[0].trim()+(pp.authors.includes(',')?' et al.':''):'The authors';
+      const des=classifyStudyDesign(pp).name;
+      if(hl&&hl.length>35) p2+=`${auth} (${pp.year}) ${this.cite(i)}, in a ${des.toLowerCase()}, investigated ${t} and reported that ${lc(hl)} These findings contribute critical empirical evidence regarding ${t}.\n\n`;
+      else if(pp.title) p2+=`A ${des.toLowerCase()} by ${auth} (${pp.year}) ${this.cite(i)}, entitled "${pp.title.substring(0,80)}${pp.title.length>80?'…':''}", provided valuable insights into ${t}.\n\n`;
+    });
+    const concls=withAbs.slice(0,4).map((pp)=>{ const s=this.sF(pp.abstract,['conclud','therefor','thus','suggest','overall']); const ri=p.indexOf(pp); return s&&s.length>35?{s,i:ri}:null; }).filter(Boolean);
+    const st=['First,','Second,','Third,','Fourth,'];
+    let p3=`3.3 Thematic Synthesis & Methodological Concordance\n\nAcross the reviewed literature, several convergent themes emerged regarding ${t}. `;
+    concls.forEach(({s,i},idx)=>{ p3+=`${st[idx]||'Additionally,'} ${lc(s)} ${this.cite(i)} `; });
+    p3+=`These recurring findings demonstrate substantial thematic concordance across diverse study designs and experimental models.`;
+    return [p1,p2.trim(),p3].join('\n\n');
+  }
+  generateDiscussion(){
+    const p=this.papers,t=this.topic,n=p.length;
+    const sLa=this.sL(p[0]?.abstract),sLb=this.sL(p[1]?.abstract);
+    const para1=`This AI-assisted literature review draft synthesized evidence from ${n} peer-reviewed publications on ${t}. ${sLa?cap(sLa)+' '+this.cite(0):''} ${sLb?'In convergence, '+lc(sLb)+' '+this.cite(1):''}`.trim();
+    const mech=[];
+    for(let i=2;i<Math.min(p.length,8);i++){const s=this.sF(p[i]?.abstract,['mechanism','pathway','molecular','therapeutic','clinical','function','regulat']); if(s&&s.length>40) mech.push({s,i});}
+    const mt=['Notably,','Of considerable relevance,','Furthermore,','Importantly,'];
+    let para2=`The mechanistic and clinical dimensions revealed through this evidence synthesis are particularly salient. `;
+    mech.slice(0,3).forEach(({s,i},idx)=>{ para2+=`${mt[idx]||'Additionally,'} ${lc(s)} ${this.cite(i)} `; });
+    para2+=`These findings underscore the necessity of integrating mechanistic insights with translational research.`;
+    const para3=`Methodological limitations & manual verification considerations: (1) automated retrieval relies on Europe PMC indexation, which may omit non-indexed journals; (2) algorithmic study-design classification is heuristic and warrants manual appraisal; (3) study heterogeneity and limited longitudinal trials constrain definitive clinical causality; and (4) records flagged with manual verification warnings require expert human oversight prior to clinical implementation.`;
+    const para4=`Notwithstanding these considerations, this literature review draft provides an evidence-based foundation for researchers and clinicians. Prospective multicenter investigations and standardized reporting protocols will further advance knowledge translation in ${t}.`;
+    return [para1,para2,para3,para4].join('\n\n');
+  }
+  generateConclusion(){
+    const t=this.topic,n=this.papers.length;
+    const recent=this.papers.filter(p=>p.year>=new Date().getFullYear()-5).length;
+    const p1=`This AI-assisted literature review draft synthesized ${n} peer-reviewed publications on ${t}, including ${recent} published within the last five years. Key mechanistic, methodological, and clinical themes have been systematically mapped.`;
+    const p2=`The synthesized evidence confirms that ${t} represents a scientifically significant domain with major biomedical and translational implications.`;
+    const p3=`Future research and translational priorities: (1) large-scale prospective clinical trials to establish causal validity; (2) standardization of methodologies across research groups; (3) thorough expert manual verification of literature review drafts; (4) multi-omics and translational integration; and (5) formal evidence-based clinical guideline development.`;
+    return [p1,p2,p3].join('\n\n');
+  }
+  generateReferences(){
+    return Object.entries(this.citMap).sort((a,b)=>a[1]-b[1]).map(([idx,num])=>({ num, text:formatVancouver(this.papers[parseInt(idx)],num), paper:this.papers[parseInt(idx)] }));
+  }
+  generate(){
+    return {
+      title:      this.generateTitle(),
+      abstractObj:this.generateAbstractObj(),
+      keywords:   this.generateKeywords(),
+      intro:      this.generateIntroduction(),
+      methods:    this.generateMethods(),
+      results:    this.generateResults(),
+      discussion: this.generateDiscussion(),
+      conclusion: this.generateConclusion(),
+      references: this.generateReferences(),
+    };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER PAPER PREVIEW (HTML)
+// ═══════════════════════════════════════════════════════════════
+function renderPaperPreview(paper){
+  const abs=paper.abstractObj;
+  const citify = t => t.replace(/\[(\d+(?:,\d+)*)\]/g,(_,n)=>`<span class="cite-num">[${n}]</span>`);
+  const sectionHTML=(num,heading,text)=>{
+    const paras=text.split('\n\n').map(p=>{
+      if(!p.trim()) return '';
+      if(/^\d+\.\d+\s/.test(p.trim())){ const lines=p.split('\n'); return `<p class="s-head" style="font-size:.82rem;margin-top:1rem">${esc(lines[0])}</p>${lines.slice(1).map(l=>`<p>${citify(esc(l))}</p>`).join('')}`; }
+      return `<p>${citify(esc(p.trim()))}</p>`;
+    }).join('');
+    return `<div class="s-head">${num}. ${heading}</div>${paras}`;
+  };
+  const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('paper-preview').innerHTML=`
+    <h1>${esc(paper.title)}</h1>
+    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: Europe PMC (EMBL-EBI) · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}</em></div>
+    <hr/>
+    <div class="s-head">Abstract</div>
+    <p><span class="ab-label">Background:</span> ${citify(esc(abs.background))}</p>
+    <p><span class="ab-label">Objective:</span> ${esc(abs.objective)}</p>
+    <p><span class="ab-label">Methods:</span> ${esc(abs.methods)}</p>
+    <p><span class="ab-label">Results:</span> ${citify(esc(abs.results))}</p>
+    <p><span class="ab-label">Conclusion:</span> ${esc(abs.conclusion)}</p>
+    <p class="kw"><strong>Keywords:</strong> ${esc(paper.keywords.join('; '))}</p>
+    <hr/>
+    ${sectionHTML('1','Introduction',paper.intro)}
+    ${sectionHTML('2','Methods',paper.methods)}
+    ${sectionHTML('3','Results',paper.results)}
+    ${sectionHTML('4','Discussion',paper.discussion)}
+    ${sectionHTML('5','Conclusion',paper.conclusion)}
+    <div class="s-head">References</div>
+    ${paper.references.map(r=>`<p class="ref-e">${esc(r.text)}</p>`).join('')}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER REFERENCES TAB
+// ═══════════════════════════════════════════════════════════════
+function renderReferencesTab(paper){
+  document.getElementById('refs-list').innerHTML =
+    paper.references.map(r=>`<li style="margin-bottom:8px">${esc(r.text)}</li>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER RELEVANCE TAB
+// ═══════════════════════════════════════════════════════════════
+function renderRelevanceTab(){
+  const p=STATE.papers,r=STATE.relevance,v=STATE.validations,rd=STATE.relevanceDetails;
+  document.getElementById('rel-table').innerHTML = p.map((pp,i)=>{
+    const pct=r[i]||0, val=v[i]||{};
+    const relObj=(rd&&rd[i]) ? rd[i] : scoreHeuristicRelevance(pp, STATE.topic);
+    const col=pct>=75?'var(--good)':pct>=50?'var(--accent)':'var(--warn)';
+    const auth=pp.authors?pp.authors.split(',')[0].trim()+(pp.authors.includes(',')?' et al.':''):'—';
+    const design=classifyStudyDesign(pp);
+    const ft=getFullTextInfo(pp);
+    const warnInfo=getManualVerificationWarnings(pp, val, pct);
+    return `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;background:#fff">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700">${i+1}</span>
+            ${getValBadgeHTML(val)}
+            <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
+            ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
+          </div>
+          <div style="font-size:.9rem;font-weight:600;color:var(--accent);margin-bottom:3px">${esc(pp.title)}</div>
+          <div style="font-size:.8rem;color:var(--muted)">${esc(auth)} · ${pp.year}${pp.journal?' · <em>'+esc(pp.journal)+'</em>':''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:1.6rem;font-weight:700;color:${col}">${pct}%</div>
+          <div style="font-size:.72rem;color:var(--muted)">heuristic relevance</div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div class="score-row"><span class="score-name">Title Match</span><div class="bar-bg"><div class="bar" style="width:${relObj.titleMatch}%"></div></div><span class="score-val">${relObj.titleMatch}%</span></div>
+        <div class="score-row"><span class="score-name">Abstract Match</span><div class="bar-bg"><div class="bar" style="width:${relObj.absMatch}%"></div></div><span class="score-val">${relObj.absMatch}%</span></div>
+        <div class="score-row"><span class="score-name">Recency</span><div class="bar-bg"><div class="bar" style="width:${relObj.recency}%"></div></div><span class="score-val">${relObj.recency}%</span></div>
+        <div class="score-row"><span class="score-name"><strong>Heuristic Relevance</strong></span><div class="bar-bg"><div class="bar" style="width:${pct}%;background:${col}"></div></div><span class="score-val" style="color:${col};font-weight:700">${pct}%</span></div>
+      </div>
+      <div class="htag-container">
+        ${relObj.explanations.map(exp => {
+          const cls = exp.includes('Weak') ? 'htag-warn' : (exp.includes('High') || exp.includes('Strong')) ? 'htag-good' : exp.includes('Recent') ? 'htag-accent' : 'htag-info';
+          const icon = exp.includes('Weak') ? '⚠️' : exp.includes('High') ? '🎯' : exp.includes('Strong') ? '🔬' : exp.includes('Recent') ? '📅' : exp.includes('MeSH') ? '🏷️' : '💡';
+          return `<span class="htag ${cls}">${icon} ${esc(exp)}</span>`;
+        }).join('')}
+      </div>
+      ${warnInfo.isClean ? `
+      <div class="manual-box-ok" style="margin-top:8px">
+        <span>✔</span>
+        <span><strong>Manual Verification:</strong> Complete bibliographic record verified (No manual flags).</span>
+      </div>` : `
+      <div class="manual-box-warn" style="margin-top:8px">
+        <div style="display:flex;align-items:center;gap:6px;font-weight:700">
+          <span>⚠️</span>
+          <span>Manual Verification Warning (${warnInfo.warnings.length} flag${warnInfo.warnings.length>1?'s':''}):</span>
+        </div>
+        <ul style="margin-left:22px;margin-top:4px;line-height:1.4">
+          ${warnInfo.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}
+        </ul>
+      </div>`}
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GO TO STEP 4
+// ═══════════════════════════════════════════════════════════════
+function goToStep4(){
+  const s4Alert = document.getElementById('step4-alert');
+  if(s4Alert) s4Alert.classList.add('hidden');
+  setStep(4);
+  showSection('step-4');
+  // Generate paper
+  const gen = new PaperGenerator(STATE.topic, STATE.papers);
+  STATE.paper = gen.generate();
+  document.getElementById('draft-title-label').textContent = STATE.paper.title.substring(0,70)+(STATE.paper.title.length>70?'…':'');
+  renderPaperPreview(STATE.paper);
+  renderReferencesTab(STATE.paper);
+  renderRelevanceTab();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PDF EXPORT — PAPER
+// ═══════════════════════════════════════════════════════════════
+async function exportPaperPDF(){
+  if(!STATE.paper) return;
+  const s4Alert = document.getElementById('step4-alert');
+  if(s4Alert) s4Alert.classList.add('hidden');
+
+  try {
+    const {jsPDF}=window.jspdf;
+    if(!jsPDF) throw new Error('PDF generator library (jsPDF) is not loaded.');
+    const doc=new jsPDF('p','mm','a4');
+    const pw=210,ph=297,ml=22,mr=22,mt=20,mb=20,cw=pw-ml-mr;
+    let y=mt;
+    const addPage=()=>{doc.addPage();y=mt;};
+    const chk=(n=12)=>{if(y+n>ph-mb)addPage();};
+    const writeLines=(text,size,style,color=[25,25,25],indent=0)=>{
+      doc.setFontSize(size);doc.setFont('times',style);doc.setTextColor(...color);
+      const ls=doc.splitTextToSize(text,cw-indent);
+      ls.forEach(l=>{chk(size*.45);doc.text(l,ml+indent,y);y+=size*.42;});
+    };
+    const sHead=(txt)=>{chk(16);y+=4;doc.setFontSize(11);doc.setFont('times','bold');doc.setTextColor(10,60,60);const ls=doc.splitTextToSize(txt,cw);ls.forEach(l=>{doc.text(l,ml,y);y+=5.5;});};
+    const subHead=(txt)=>{chk(10);y+=1;doc.setFontSize(10);doc.setFont('times','bolditalic');doc.setTextColor(30,30,30);const ls=doc.splitTextToSize(txt,cw);ls.forEach(l=>{doc.text(l,ml,y);y+=5;});y+=1;};
+    const paper=STATE.paper,abs=paper.abstractObj;
+    const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+
+    // Title page header bar
+    doc.setFillColor(15,107,107);doc.rect(0,0,pw,14,'F');
+    doc.setFontSize(9);doc.setFont('times','bold');doc.setTextColor(255,255,255);
+    doc.text('SciDraft AI — AI-Assisted Literature Review Draft',ml,9);
+    doc.text('Vancouver Citation Style',pw-mr,9,{align:'right'});
+
+    y=24;
+    doc.setFontSize(15);doc.setFont('times','bold');doc.setTextColor(10,60,60);
+    const tl=doc.splitTextToSize(paper.title,cw);tl.forEach(l=>{doc.text(l,pw/2,y,{align:'center'});y+=7;});
+    y+=4;
+    doc.setFontSize(9.5);doc.setFont('times','normal');doc.setTextColor(90,90,90);
+    doc.text(`Generated: ${today} | Source: Europe PMC | Deduplication: ${STATE.duplicatesRemoved||0} excluded | Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=5;
+    doc.text('Citation style: Vancouver (ICMJE) | Powered by SciDraft AI v2.0 · Dr Raouf Roshdy',pw/2,y,{align:'center'});y+=8;
+    doc.setDrawColor(15,107,107);doc.setLineWidth(.5);doc.line(ml,y,pw-mr,y);y+=8;
+
+    sHead('ABSTRACT');
+    const absFields=[['Background: ',abs.background],['Objective: ',abs.objective],['Methods: ',abs.methods],['Results: ',abs.results],['Conclusion: ',abs.conclusion]];
+    absFields.forEach(([lbl,txt])=>{
+      chk(8);
+      doc.setFontSize(9.5);doc.setFont('times','bold');doc.setTextColor(10,10,10);
+      const lw=doc.getTextWidth(lbl);
+      doc.text(lbl,ml,y);
+      doc.setFont('times','normal');
+      const clean=txt.replace(/\[\d+(?:,\d+)*\]/g,m=>m);
+      const bl=doc.splitTextToSize(clean,cw-lw);
+      doc.text(bl[0]||'',ml+lw,y);y+=4.2;
+      bl.slice(1).forEach(l=>{chk(5);doc.text(l,ml,y);y+=4.2;});y+=1.5;
+    });
+    y+=2;doc.setFont('times','italic');doc.setFontSize(9);doc.setTextColor(70,70,70);
+    const kwl=doc.splitTextToSize('Keywords: '+paper.keywords.join('; '),cw);kwl.forEach(l=>{chk(5);doc.text(l,ml,y);y+=4;});
+    doc.setDrawColor(180,180,180);doc.setLineWidth(.25);y+=3;doc.line(ml,y,pw-mr,y);y+=5;
+
+    const SECTS=[['1. INTRODUCTION',paper.intro],['2. METHODS',paper.methods],['3. RESULTS',paper.results],['4. DISCUSSION',paper.discussion],['5. CONCLUSION',paper.conclusion]];
+    SECTS.forEach(([heading,content])=>{
+      sHead(heading);
+      content.split('\n\n').forEach(para=>{
+        if(!para.trim()) return;
+        if(/^\d+\.\d+\s/.test(para.trim())&&para.length<120){subHead(para.trim());return;}
+        doc.setFont('times','normal');doc.setFontSize(10.5);doc.setTextColor(25,25,25);
+        const ls=doc.splitTextToSize(para.trim(),cw);ls.forEach(l=>{chk(6);doc.text(l,ml,y);y+=5;});y+=2;
+      });
+    });
+
+    addPage();sHead('REFERENCES');
+    doc.setFont('times','normal');doc.setFontSize(9.5);doc.setTextColor(25,25,25);
+    paper.references.forEach(r=>{
+      const ls=doc.splitTextToSize(r.text,cw);
+      ls.forEach((l,li)=>{chk(5);doc.text(l,ml+(li>0?5:0),y);y+=4.5;});y+=1.5;
+    });
+
+    // Footer on every page
+    const tot=doc.internal.getNumberOfPages();
+    for(let i=1;i<=tot;i++){
+      doc.setPage(i);
+      doc.setFillColor(15,107,107);doc.rect(0,ph-10,pw,10,'F');
+      doc.setFontSize(7.5);doc.setFont('times','normal');doc.setTextColor(255,255,255);
+      doc.text(`SciDraft AI — AI-Assisted Literature Review Draft · ${STATE.topic.substring(0,40)}… · Page ${i} of ${tot}`,pw/2,ph-4,{align:'center'});
+    }
+    doc.save(`AI_Literature_Review_Draft_${STATE.topic.replace(/\s+/g,'_').substring(0,35)}.pdf`);
+  } catch(err){
+    console.error('PDF Export Error:', err);
+    if(s4Alert){
+      s4Alert.className = 'alert-box alert-error';
+      s4Alert.innerHTML = `
+        <div class="alert-title">❌ Literature Review Draft PDF Export Failed</div>
+        <div class="alert-reason"><strong>Reason:</strong> ${esc(err.message || 'Browser encountered an issue rendering the review draft PDF.')}</div>
+        <div class="alert-advice">💡 Check browser permissions for downloading files, or try exporting the References PDF.</div>
+        <div class="alert-actions">
+          <button class="alert-btn alert-btn-primary" onclick="exportPaperPDF()">🔄 Retry Export</button>
+          <button class="alert-btn alert-btn-secondary" onclick="document.getElementById('step4-alert').classList.add('hidden')">✕ Dismiss</button>
+        </div>
+      `;
+      s4Alert.classList.remove('hidden');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PDF EXPORT — REFERENCES
+// ═══════════════════════════════════════════════════════════════
+async function exportReferencesPDF(){
+  if(!STATE.paper) return;
+  const s4Alert = document.getElementById('step4-alert');
+  if(s4Alert) s4Alert.classList.add('hidden');
+
+  try {
+    const {jsPDF}=window.jspdf;
+    if(!jsPDF) throw new Error('PDF generator library (jsPDF) is not loaded.');
+    const doc=new jsPDF('p','mm','a4');
+    const pw=210,ph=297,ml=22,mr=22,mt=20,mb=20,cw=pw-ml-mr;
+    let y=mt;
+    const addPage=()=>{doc.addPage();y=mt;};
+    const chk=(n=10)=>{if(y+n>ph-mb)addPage();};
+    const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+
+    doc.setFillColor(15,107,107);doc.rect(0,0,pw,14,'F');
+    doc.setFontSize(9);doc.setFont('times','bold');doc.setTextColor(255,255,255);
+    doc.text('SciDraft AI — AI-Assisted Literature Review References & Verification',ml,9);
+    doc.text('ICMJE / Vancouver Style',pw-mr,9,{align:'right'});
+
+    y=24;
+    doc.setFontSize(13);doc.setFont('times','bold');doc.setTextColor(10,60,60);
+    const hl=doc.splitTextToSize(`Reference List: ${STATE.topic}`,cw);
+    hl.forEach(l=>{doc.text(l,pw/2,y,{align:'center'});y+=6;});
+    y+=3;
+    doc.setFontSize(8.5);doc.setFont('times','normal');doc.setTextColor(90,90,90);
+    doc.text(`SciDraft AI · Vancouver Citation Style · Generated: ${today}`,pw/2,y,{align:'center'});y+=4.5;
+    doc.text(`Source: Europe PMC (EMBL-EBI) · ${STATE.paper.references.length} unique references (${STATE.duplicatesRemoved||0} duplicates excluded) · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=7;
+    doc.setDrawColor(15,107,107);doc.setLineWidth(.5);doc.line(ml,y,pw-mr,y);y+=6;
+
+    // Column headers
+    doc.setFillColor(227,242,242);doc.rect(ml,y-4,cw,8,'F');
+    doc.setFontSize(9);doc.setFont('times','bold');doc.setTextColor(15,107,107);
+    doc.text('#',ml+1,y);doc.text('Reference (Vancouver) & Classification',ml+9,y);
+    doc.text('Heuristic Rel.',pw-mr-28,y);doc.text('Status',pw-mr,y,{align:'right'});
+    y+=6;doc.setDrawColor(200,220,220);doc.setLineWidth(.2);doc.line(ml,y,pw-mr,y);y+=3;
+
+    STATE.paper.references.forEach((r,i)=>{
+      const pct=STATE.relevance[i]||0,val=STATE.validations[i]||{};
+      const relObj=(STATE.relevanceDetails&&STATE.relevanceDetails[i]) ? STATE.relevanceDetails[i] : scoreHeuristicRelevance(r.paper, STATE.topic);
+      const design = classifyStudyDesign(r.paper);
+      const ft = getFullTextInfo(r.paper);
+      const warnInfo = getManualVerificationWarnings(r.paper, val, pct);
+
+      const ls=doc.splitTextToSize(r.text,cw-55);
+      const rowH=ls.length*4.2+10;
+      chk(rowH+2);
+      if(i%2===0){doc.setFillColor(248,252,252);doc.rect(ml,y-3,cw,rowH,'F');}
+      doc.setFont('times','bold');doc.setFontSize(9);doc.setTextColor(15,107,107);
+      doc.text(`${r.num}.`,ml+1,y);
+      doc.setFont('times','normal');doc.setFontSize(8.5);doc.setTextColor(20,20,20);
+      ls.forEach((l,li)=>doc.text(l,ml+9,y+li*4.2));
+      
+      // Additional classification info row
+      const extraY = y + ls.length * 4.2;
+      doc.setFont('times','italic');doc.setFontSize(7.3);doc.setTextColor(80,80,80);
+      const expStr = relObj.explanations.length ? ` | [${relObj.explanations.slice(0,2).join(', ')}]` : '';
+      const extraText = `Design: ${design.name} | ${ft.label}${expStr}${warnInfo.isClean ? '' : ' | [!] '+warnInfo.warnings[0].substring(0,30)+'…'}`;
+      doc.text(extraText, ml+9, extraY);
+
+      const rc=pct>=70?[34,150,90]:pct>=45?[200,140,0]:[200,50,50];
+      doc.setFont('times','bold');doc.setFontSize(10);doc.setTextColor(...rc);
+      doc.text(`${pct}%`,pw-mr-28,y);
+      doc.setFont('times',val.valid?'bold':'italic');doc.setFontSize(8);
+      doc.setTextColor(val.valid?15:180,val.valid?107:60,val.valid?107:60);
+      doc.text(val.status||'—',pw-mr,y,{align:'right'});
+      if(r.paper.doi||r.paper.pmid){
+        doc.setFont('times','italic');doc.setFontSize(7.2);doc.setTextColor(130,130,130);
+        const id=r.paper.doi?`doi:${r.paper.doi}`:`PMID:${r.paper.pmid}`;
+        doc.text(id,ml+9,extraY+3.8);
+      }
+      doc.setDrawColor(210,225,225);doc.line(ml,y+rowH-1,pw-mr,y+rowH-1);
+      y+=rowH+2;
+    });
+
+    const tot=doc.internal.getNumberOfPages();
+    for(let i=1;i<=tot;i++){
+      doc.setPage(i);
+      doc.setFillColor(15,107,107);doc.rect(0,ph-10,pw,10,'F');
+      doc.setFontSize(7.5);doc.setFont('times','normal');doc.setTextColor(255,255,255);
+      doc.text(`SciDraft AI — References · Page ${i} of ${tot}`,pw/2,ph-4,{align:'center'});
+    }
+    doc.save(`AI_Review_References_${STATE.topic.replace(/\s+/g,'_').substring(0,30)}.pdf`);
+  } catch(err){
+    console.error('References PDF Export Error:', err);
+    if(s4Alert){
+      s4Alert.className = 'alert-box alert-error';
+      s4Alert.innerHTML = `
+        <div class="alert-title">❌ References PDF Export Failed</div>
+        <div class="alert-reason"><strong>Reason:</strong> ${esc(err.message || 'Browser encountered an issue rendering the references PDF.')}</div>
+        <div class="alert-advice">💡 Check browser permissions for downloading files and try again.</div>
+        <div class="alert-actions">
+          <button class="alert-btn alert-btn-primary" onclick="exportReferencesPDF()">🔄 Retry Export</button>
+          <button class="alert-btn alert-btn-secondary" onclick="document.getElementById('step4-alert').classList.add('hidden')">✕ Dismiss</button>
+        </div>
+      `;
+      s4Alert.classList.remove('hidden');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN PIPELINE
+// ═══════════════════════════════════════════════════════════════
+async function runPipeline(){
+  clearStep1Alert();
+  const topicInp = document.getElementById('topic-input');
+  const topic   = topicInp ? topicInp.value.trim() : '';
+  const pgSize  = parseInt(document.getElementById('page-size')?.value || STATE.pageSize || 30) || 30;
+  const yearRange = STATE.yearRange || 5;
+
+  if(!topic){
+    if(topicInp){
+      topicInp.style.outline='2px solid #ef4444';
+      topicInp.focus();
+    }
+    showStep1Alert(
+      'Topic Required',
+      'The research topic field cannot be empty.',
+      'Enter a biomedical or clinical research topic (e.g., "CRISPR in oncology", "mRNA vaccine durability", "Gestational diabetes screening").'
+    );
+    return;
+  }
+
+  // Clear previous Step 2 errors and reset visual state
+  const s2box = document.getElementById('step2-error-box');
+  if(s2box) s2box.classList.add('hidden');
+  const cancelWrap = document.getElementById('proc-cancel-wrapper');
+  if(cancelWrap) cancelWrap.classList.remove('hidden');
+  const anim = document.getElementById('proc-anim');
+  if(anim) anim.style.opacity = '1';
+
+  STATE.topic=topic; STATE.yearRange=yearRange; STATE.pageSize=pgSize;
+  currentAbortController = new AbortController();
+  const signal = currentAbortController.signal;
+
+  setBtnLoading(true);
+  setStep(2);
+  showSection('step-2');
+
+  try {
+    // ── Fetch ──────────────────────────────────────────────────────
+    setProc('Connecting to Europe PMC…','Initialising literature search pipeline',5);
+    await sleep(400);
+    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    setProc('Sending GET request to Europe PMC…',`Query: "${topic}" · Fetching ${pgSize} papers · Last ${yearRange<99?yearRange+' years':'all time'}`,15);
+    await sleep(300);
+    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    const { results, hitCount } = await fetchPapers(topic, pgSize, yearRange, signal);
+    const { unique, dupCount } = deduplicatePapers(results);
+    STATE.papers = unique;
+    STATE.duplicatesRemoved = dupCount;
+
+    if(!STATE.papers.length){
+      throw new Error(`No papers found for "${topic}" in the selected year range.`);
+    }
+
+    setProc(`Found ${hitCount} records · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed) · Parsing ${STATE.papers.length} unique papers…`,`Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`,35);
+    await sleep(300);
+    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // ── Validate (Controlled Batches of 5 with Live Count & Abort Support) ──
+    setProc('Validating references via Europe PMC…', `0 of ${STATE.papers.length} references validated (0%) · Batched parallel processing`, 40);
+    await sleep(50);
+
+    STATE.validations = new Array(STATE.papers.length);
+    let completedCount = 0;
+    let verifiedCount = 0;
+    let apiErrorCount = 0;
+    const BATCH_SIZE = 5;
+
+    for (let i = 0; i < STATE.papers.length; i += BATCH_SIZE) {
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      const batch = STATE.papers.slice(i, i + BATCH_SIZE);
+
+      const batchPromises = batch.map(async (paper, bIdx) => {
+        const globalIdx = i + bIdx;
+        const v = await validateRef(paper, signal);
+        STATE.validations[globalIdx] = v;
+        completedCount++;
+        if (v.valid) verifiedCount++;
+        if (v.status === 'API Error' || v.status === 'Network Error' || v.status === 'Rate Limited') {
+          apiErrorCount++;
+        }
+        const pct = 40 + Math.round((completedCount / STATE.papers.length) * 32);
+        const cachedTag = v.cached ? ' [cached]' : '';
+        setProc(
+          `Validating references: ${completedCount} of ${STATE.papers.length} completed (${Math.round((completedCount / STATE.papers.length) * 100)}%)`,
+          `Batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(STATE.papers.length / BATCH_SIZE)} · Verified: ${verifiedCount}${cachedTag} · "${paper.title.substring(0, 48)}…"`,
+          pct
+        );
+        return v;
+      });
+
+      await Promise.all(batchPromises);
+      if (i + BATCH_SIZE < STATE.papers.length) {
+        await abortableSleep(40, signal);
+      }
+    }
+
+    setProc(`Validation complete: ${verifiedCount}/${STATE.papers.length} verified`, 'Computing relevance scores…', 72);
+    await sleep(150);
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // Check for partial validation failures to show warning banner on Step 3
+    const valAlert = document.getElementById('partial-validation-alert');
+    if (valAlert) {
+      const unverifiedCount = STATE.papers.length - verifiedCount;
+      if (apiErrorCount > 0 || unverifiedCount > 0) {
+        valAlert.className = 'alert-box alert-warn';
+        let detailMsg = `Europe PMC verified ${verifiedCount} of ${STATE.papers.length} papers.`;
+        if (apiErrorCount > 0) {
+          detailMsg += ` ${apiErrorCount} reference check(s) encountered temporary API rate or connection limits during verification.`;
+        }
+        if (unverifiedCount > apiErrorCount) {
+          detailMsg += ` ${unverifiedCount - apiErrorCount} paper(s) were not indexed in primary verification query.`;
+        }
+        valAlert.innerHTML = `
+          <div class="alert-title">⚠️ Partial Reference Validation Notice</div>
+          <div class="alert-reason"><strong>Validation Summary:</strong> ${esc(detailMsg)}</div>
+          <div class="alert-advice">💡 All ${STATE.papers.length} retrieved papers are preserved and included in your review draft. Citations with unverified status can be checked directly via the linked DOI or PubMed buttons below.</div>
+        `;
+        valAlert.classList.remove('hidden');
+      } else {
+        valAlert.classList.add('hidden');
+      }
+    }
+
+    // ── Relevance ──────────────────────────────────────────────────
+    STATE.relevance=[];
+    STATE.relevanceDetails=[];
+    STATE.papers.forEach(p=>{
+      const relObj = scoreHeuristicRelevance(p,topic);
+      STATE.relevance.push(relObj.score);
+      STATE.relevanceDetails.push(relObj);
+    });
+    setProc('Heuristic relevance scoring complete','Building per-paper report cards with diagnostic explanations…',85);
+    await sleep(300);
+    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // ── Render Step 3 ──────────────────────────────────────────────
+    setProc('Generating individual paper reports…','Almost done…',95);
+    await sleep(300);
+    renderPaperCards();
+
+    setStep(3);
+    showSection('step-3');
+    setProc('Complete','',100);
+
+  } catch(err){
+    setBtnLoading(false);
+    const errInfo = classifyPipelineError(err, topic, pgSize, yearRange);
+    showStep2Error(errInfo);
+    return;
+  }
+
+  setBtnLoading(false);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KEY HANDLER
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('topic-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();runPipeline();}
+});
+</script>
+</body>
+</html>

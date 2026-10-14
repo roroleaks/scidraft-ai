@@ -1,0 +1,21 @@
+{
+  "name": "scidraft-ai",
+  "version": "2.0.0",
+  "description": "AI-Assisted Literature Review Draft Platform powered by Europe PMC REST API with Vancouver citations, study classification, and PDF export.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "europe-pmc",
+    "literature-review",
+    "scientific-writing",
+    "vancouver-style",
+    "icmje",
+    "medical-research",
+    "academic-writing",
+    "pdf-export"
+  ],
+  "author": "Dr. Raouf Roshdy",
+  "license": "MIT"
+}
