@@ -2,9 +2,9 @@
   "name": "scidraft-ai",
   "version": "2.0.0",
   "description": "AI-Assisted Literature Review Draft Platform powered by Europe PMC REST API with Vancouver citations, study classification, and PDF export.",
-  "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node dev-server.js",
+    "dev": "node dev-server.js"
   },
   "keywords": [
     "europe-pmc",
