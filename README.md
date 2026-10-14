@@ -4,7 +4,8 @@
 > Transform any biomedical or scientific research topic into a structured, publication-grade academic paper draft with validated **Vancouver (ICMJE)** references, heuristic relevance scoring, study-design classification, and dual PDF exports.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-teal.svg)](LICENSE)
-[![Live Demo](https://img.shields.io/badge/Demo-scidraft--ai.vercel.app-brightgreen.svg)](https://scidraft-ai.vercel.app)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-scidraftai.vercel.app-brightgreen.svg)](https://scidraftai.vercel.app)
+[![Mirror](https://img.shields.io/badge/Mirror-scidraft--ai.vercel.app-teal.svg)](https://scidraft-ai.vercel.app)
 [![Europe PMC](https://img.shields.io/badge/API-Europe%20PMC%20REST-0f6b6b.svg)](https://europepmc.org)
 [![Semantic Scholar](https://img.shields.io/badge/API-Semantic%20Scholar%20Graph-6d28d9.svg)](https://www.semanticscholar.org)
 [![Citation Style](https://img.shields.io/badge/Citations-Vancouver%20%2F%20ICMJE-2e7d32.svg)](https://www.nlm.nih.gov/bsd/uniform_requirements.html)
