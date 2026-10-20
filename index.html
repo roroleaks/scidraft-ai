@@ -378,7 +378,51 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 .paper-preview .ab-label { font-weight: 700; }
 .paper-preview .kw { font-size: .8rem; font-style: italic; color: #444; }
 .paper-preview .ref-e { font-size: .78rem; margin-bottom: .35rem; color: #222; }
-.cite-num { color: #1d4ed8; font-weight: 600; font-size: .76rem; }
+.cite-num {
+  font-size: .74em;
+  vertical-align: super;
+  line-height: 0;
+  font-weight: 700;
+  color: var(--accent, #0f6b6b);
+  cursor: pointer;
+  padding: 0 1.5px;
+  position: relative;
+  top: -0.15em;
+  letter-spacing: 0.02em;
+  transition: all .15s ease;
+}
+.cite-num:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+.paper-preview.cite-style-baseline .cite-num {
+  vertical-align: baseline;
+  top: 0;
+  font-size: .8rem;
+  line-height: inherit;
+}
+.cite-style-btn {
+  padding: 4px 10px;
+  font-size: .76rem;
+  font-weight: 600;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s ease;
+  line-height: 1.2;
+}
+.cite-style-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cite-style-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 1px 3px rgba(15, 107, 107, 0.2);
+}
 
 /* scroll */
 .paper-preview::-webkit-scrollbar { width: 5px; }
@@ -891,6 +935,17 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 
       <!-- Tab: Paper Preview -->
       <div id="tab-paper">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted)">
+            <span style="font-weight:600;color:var(--ink)">In-Text Vancouver Citation Style:</span>
+            <span id="cite-style-active-badge" style="font-size:.76rem;background:var(--accent-light);color:var(--accent-dark);padding:2px 8px;border-radius:12px;font-weight:600">✔ Superscript [1] (Upper Case) Active</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <button type="button" class="cite-style-btn active" id="btn-cite-sb" onclick="setCitationStyle('superscript-bracket')"><sup>[1]</sup> Bracketed Superscript</button>
+            <button type="button" class="cite-style-btn" id="btn-cite-sc" onclick="setCitationStyle('superscript-clean')"><sup>1</sup> Pure Superscript</button>
+            <button type="button" class="cite-style-btn" id="btn-cite-base" onclick="setCitationStyle('baseline')">[1] Baseline</button>
+          </div>
+        </div>
         <div class="paper-preview" id="paper-preview"></div>
       </div>
 
@@ -955,7 +1010,8 @@ let STATE = {
   pageSize: 30,
   duplicatesRemoved: 0,
   searchSource: 'both',
-  sourceCounts: { epmc: 0, s2: 0, merged: 0 }
+  sourceCounts: { epmc: 0, s2: 0, merged: 0 },
+  citationStyle: 'superscript-bracket'
 };
 let currentAbortController = null;
 
@@ -2964,11 +3020,54 @@ class PaperReviewEngine {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// CITATION FORMATTING & CONTROLS
+// ═══════════════════════════════════════════════════════════════
+function setCitationStyle(style){
+  STATE.citationStyle = style;
+  ['sb', 'sc', 'base'].forEach(id => {
+    const btn = document.getElementById(`btn-cite-${id}`);
+    if(btn) btn.classList.remove('active');
+  });
+  const badge = document.getElementById('cite-style-active-badge');
+  if(style === 'superscript-bracket'){
+    document.getElementById('btn-cite-sb')?.classList.add('active');
+    if(badge) badge.textContent = '✔ Superscript [1] (Upper Case) Active';
+  } else if(style === 'superscript-clean'){
+    document.getElementById('btn-cite-sc')?.classList.add('active');
+    if(badge) badge.textContent = '✔ Superscript 1 (Pure Upper) Active';
+  } else if(style === 'baseline'){
+    document.getElementById('btn-cite-base')?.classList.add('active');
+    if(badge) badge.textContent = 'Standard [1] Baseline Active';
+  }
+  const preview = document.getElementById('paper-preview');
+  if(preview){
+    if(style === 'baseline'){
+      preview.classList.add('cite-style-baseline');
+    } else {
+      preview.classList.remove('cite-style-baseline');
+    }
+  }
+  if(STATE.paper){
+    renderPaperPreview(STATE.paper);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // RENDER PAPER PREVIEW (HTML)
 // ═══════════════════════════════════════════════════════════════
 function renderPaperPreview(paper){
   const abs=paper.abstractObj;
-  const citify = t => t.replace(/\[(\d+(?:,\d+)*)\]/g,(_,n)=>`<span class="cite-num">[${n}]</span>`);
+  const citify = t => {
+    const style = STATE.citationStyle || 'superscript-bracket';
+    const showBrackets = style !== 'superscript-clean';
+    return String(t || '').replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+      const parts = n.split(',').map(s => s.trim()).filter(Boolean);
+      const cleanNums = parts.join(', ');
+      const firstNum = parts[0] || '1';
+      const display = showBrackets ? `[${cleanNums}]` : cleanNums;
+      return `<sup class="cite-num" title="Vancouver Citation: ${cleanNums} · Click to jump to reference" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${display}</sup>`;
+    });
+  };
   const sectionHTML=(num,heading,text)=>{
     const paras=text.split('\n\n').map(p=>{
       if(!p.trim()) return '';
@@ -2979,9 +3078,10 @@ function renderPaperPreview(paper){
   };
   const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
   const srcName = STATE.searchSource === 's2' ? 'Semantic Scholar (Allen Institute for AI)' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
+  const citeStyleLabel = (STATE.citationStyle === 'superscript-clean') ? 'Vancouver (ICMJE) Pure Superscript' : (STATE.citationStyle === 'baseline') ? 'Vancouver (ICMJE) Baseline Brackets' : 'Vancouver (ICMJE) Bracketed Superscript ("Upper Case")';
   document.getElementById('paper-preview').innerHTML=`
     <h1>${esc(paper.title)}</h1>
-    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: ${srcName} · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}</em></div>
+    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: ${srcName} · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'} · In-text citations: ${citeStyleLabel}</em></div>
     <hr/>
     <div class="s-head">Abstract</div>
     <p><span class="ab-label">Background:</span> ${citify(esc(abs.background))}</p>
@@ -2997,7 +3097,7 @@ function renderPaperPreview(paper){
     ${sectionHTML('4','Discussion',paper.discussion)}
     ${sectionHTML('5','Conclusion',paper.conclusion)}
     <div class="s-head">References</div>
-    ${paper.references.map(r=>`<p class="ref-e">${esc(r.text)}</p>`).join('')}
+    ${paper.references.map(r=>`<p class="ref-e" id="ref-anchor-${r.num}">${esc(r.text)}</p>`).join('')}
   `;
 }
 
