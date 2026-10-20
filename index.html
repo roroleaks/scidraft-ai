@@ -4,6 +4,39 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SciDraft AI — AI-Assisted Literature Review Draft</title>
+  <meta name="description" content="AI-Assisted Biomedical Literature Review Draft Platform. Query Europe PMC & Semantic Scholar, validate references, and generate publication-grade IMRaD drafts with Vancouver citations."/>
+  
+  <!-- Favicon & Touch Icons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+  
+  <!-- Web App Manifest (PWA / Mobile & Desktop Home Screen Tab) -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#0f6b6b"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="application-name" content="SciDraft AI"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="SciDraft AI"/>
+
+  <!-- Social Sharing / Open Graph (WhatsApp, Telegram, iMessage, Facebook) -->
+  <meta property="og:type" content="website"/>
+  <meta property="og:url" content="https://scidraftai.vercel.app/"/>
+  <meta property="og:title" content="SciDraft AI — AI-Assisted Literature Review Draft"/>
+  <meta property="og:description" content="AI-Assisted Biomedical Literature Review Draft Platform with Vancouver Citation Formatting and Dual-Engine Search."/>
+  <meta property="og:image" content="https://scidraftai.vercel.app/og-image.jpg"/>
+  <meta property="og:image:width" content="1024"/>
+  <meta property="og:image:height" content="1024"/>
+  <meta property="og:image:alt" content="SciDraft AI App Icon"/>
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="SciDraft AI — AI-Assisted Literature Review Draft"/>
+  <meta name="twitter:description" content="AI-Assisted Biomedical Literature Review Draft Platform with Vancouver Citation Formatting."/>
+  <meta name="twitter:image" content="https://scidraftai.vercel.app/og-image.jpg"/>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
 /* ═══════════════════════════════════════════════════
@@ -685,10 +718,8 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 <header class="hdr">
   <div class="hdr-inner">
     <!-- Left: Logo -->
-    <div class="hdr-left">
-      <svg class="lens-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-      </svg>
+    <div class="hdr-left" style="display:flex;align-items:center;gap:10px">
+      <img src="apple-touch-icon.png" alt="SciDraft AI Logo" style="width:34px;height:34px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.3);object-fit:cover;border:1px solid rgba(255,255,255,0.25);flex-shrink:0" />
       <span class="title-main">SciDraft <span class="version-badge">AI · v2.0</span></span>
     </div>
     <!-- Center: Title -->

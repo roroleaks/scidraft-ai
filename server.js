@@ -10,8 +10,10 @@ const MIME_TYPES = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
+  '.ico': 'image/x-icon',
   '.gif': 'image/gif',
-  '.svg': 'image/svg+xml'
+  '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json'
 };
 
 function handler(req, res) {
