@@ -279,7 +279,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 .source-both  { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
 
 /* Study-design classification badges */
-.design-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 700; }
+.design-badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 9px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
 .design-rct { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
 .design-meta { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
 .design-cohort { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
@@ -287,6 +287,9 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 .design-cross { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
 .design-exp { background: #ccfbf1; color: #0f766e; border: 1px solid #5eead4; }
 .design-review { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.design-diag { background: #cffafe; color: #0e7490; border: 1px solid #67e8f9; }
+.design-case { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+.design-protocol { background: #f8fafc; color: #334155; border: 1px solid #cbd5e1; }
 .design-obs { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
 
 /* Full-text availability badges */
@@ -1925,32 +1928,161 @@ function balanceAndCapRatio(uniquePapers, targetCount, sourceMode = 'both'){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// STUDY-DESIGN CLASSIFIER
+// COMPREHENSIVE STUDY-DESIGN & PAPER TYPE CLASSIFIER
 // ═══════════════════════════════════════════════════════════════
 function classifyStudyDesign(paper){
-  const text = `${paper.title} ${paper.abstract} ${paper.pubType||''}`.toLowerCase();
-  if(/\b(randomi[sz]ed controlled trial|clinical trial|double-blind|placebo-controlled|randomi[sz]ed trial|phase [1234]|rct)\b/.test(text)){
+  const title = (paper.title || '').toLowerCase();
+  const abstract = (paper.abstract || '').toLowerCase();
+  const pubType = Array.isArray(paper.pubType) ? paper.pubType.join(' ').toLowerCase() : (paper.pubType || '').toLowerCase();
+  const text = `${title} ${abstract} ${pubType}`;
+
+  // 1. Protocol
+  if(/\b(study protocol|trial protocol|protocol for a|protocol:)\b/.test(text) || /\bprotocol\b/.test(title) || pubType.includes('protocol')){
+    return { name:'Protocol', class:'design-protocol', icon:'📜' };
+  }
+
+  // 2. Umbrella, Scoping, Rapid Reviews
+  if(/\b(umbrella review|review of systematic reviews|overview of reviews)\b/.test(text)){
+    return { name:'Umbrella Review', class:'design-meta', icon:'☂️' };
+  }
+  if(/\b(scoping review|scoping literature review|scoping study)\b/.test(text)){
+    return { name:'Scoping Review', class:'design-review', icon:'🔭' };
+  }
+  if(/\b(rapid review|rapid evidence assessment|rapid systematic review)\b/.test(text)){
+    return { name:'Rapid Review', class:'design-review', icon:'⚡' };
+  }
+
+  // 3. Systematic Review & Meta-Analysis combinations
+  const hasSysRev = /\b(systematic review|systematic literature review|systematically reviewed|prisma)\b/.test(text);
+  const hasMeta = /\b(meta-analysis|meta-analytic|meta-regression|metaanalysis|pooled analysis)\b/.test(text);
+  if(hasSysRev && hasMeta){
+    return { name:'Systematic Review and Meta-Analysis', class:'design-meta', icon:'📊' };
+  }
+  if(hasMeta){
+    return { name:'Meta-Analysis', class:'design-meta', icon:'📈' };
+  }
+  if(hasSysRev){
+    return { name:'Systematic Review', class:'design-meta', icon:'📚' };
+  }
+
+  // 4. Randomized Clinical / Controlled Trials
+  if(/\b(non-randomi[sz]ed controlled|non-randomi[sz]ed clinical|nonrandomi[sz]ed controlled)\b/.test(text)){
+    return { name:'Non-Randomized Controlled Trial', class:'design-rct', icon:'🧪' };
+  }
+  if(/\brandomi[sz]ed clinical trial\b/.test(text)){
+    return { name:'Randomized Clinical Trial', class:'design-rct', icon:'🧪' };
+  }
+  if(/\b(randomi[sz]ed controlled trial|\brct\b|randomi[sz]ed trial|double-blind|triple-blind|placebo-controlled|parallel-group randomi[sz]ed)\b/.test(text) || pubType.includes('randomized controlled trial')){
     return { name:'Randomized Controlled Trial (RCT)', class:'design-rct', icon:'🧪' };
   }
-  if(/\b(systematic review|meta-analysis|meta-analytic|prisma|systematic literature review)\b/.test(text)){
-    return { name:'Systematic Review / Meta-Analysis', class:'design-meta', icon:'📊' };
+  if(/\b(quasi-experimental|quasiexperimental|non-equivalent control)\b/.test(text)){
+    return { name:'Quasi-Experimental Study', class:'design-exp', icon:'⚙️' };
   }
-  if(/\b(cohort study|prospective cohort|retrospective cohort|longitudinal study|follow-up study)\b/.test(text)){
+  if(/\b(before-and-after|before-after study|pre-post study|pre-and post-intervention)\b/.test(text)){
+    return { name:'Before-and-After Study', class:'design-cohort', icon:'🔄' };
+  }
+  if(/\b(clinical trial|phase [1234] (trial|study)|open-label trial|single-arm trial)\b/.test(text) || pubType.includes('clinical trial')){
+    return { name:'Clinical Trial', class:'design-rct', icon:'🩺' };
+  }
+
+  // 5. Diagnostic & Prognostic & Prediction Studies
+  if(/\b(diagnostic accuracy|roc curve|sensitivity and specificity|area under the curve|auc-roc)\b/.test(text)){
+    return { name:'Diagnostic Accuracy Study', class:'design-diag', icon:'🎯' };
+  }
+  if(/\b(diagnostic test|diagnostic performance|diagnostic utility|diagnostic biomarker)\b/.test(text)){
+    return { name:'Diagnostic Test Study', class:'design-diag', icon:'🔍' };
+  }
+  if(/\b(prediction model|predictive model|nomogram|risk prediction|risk score model|tripod)\b/.test(text)){
+    return { name:'Prediction Model Study', class:'design-diag', icon:'🔮' };
+  }
+  if(/\b(prognostic study|prognostic factor|prognostic value|prognostic biomarker|prognostic significance)\b/.test(text)){
+    return { name:'Prognostic Study', class:'design-diag', icon:'📉' };
+  }
+  if(/\b(validation study|external validation|internal validation|psychometric validation)\b/.test(text)){
+    return { name:'Validation Study', class:'design-diag', icon:'✅' };
+  }
+
+  // 6. Pilot & Feasibility Studies
+  if(/\b(pilot study|pilot trial|pilot randomized|pilot investigation)\b/.test(text)){
+    return { name:'Pilot Study', class:'design-exp', icon:'🛫' };
+  }
+  if(/\b(feasibility study|feasibility trial|feasibility and acceptability)\b/.test(text)){
+    return { name:'Feasibility Study', class:'design-exp', icon:'🛠️' };
+  }
+
+  // 7. Qualitative & Mixed-Methods & Survey
+  if(/\b(mixed-methods|mixed methods|convergent parallel)\b/.test(text)){
+    return { name:'Mixed-Methods Study', class:'design-cross', icon:'🧩' };
+  }
+  if(/\b(qualitative study|qualitative research|thematic analysis|grounded theory|phenomenological|semi-structured interview)\b/.test(text)){
+    return { name:'Qualitative Study', class:'design-cross', icon:'💬' };
+  }
+  if(/\b(survey study|questionnaire survey|cross-sectional survey|web-based survey|online survey)\b/.test(text)){
+    return { name:'Survey Study', class:'design-cross', icon:'📋' };
+  }
+
+  // 8. Cohort Studies (Prospective, Retrospective, General)
+  if(/\b(prospective cohort|prospective longitudinal cohort|prospective follow-up)\b/.test(text)){
+    return { name:'Prospective Cohort Study', class:'design-cohort', icon:'👥' };
+  }
+  if(/\b(retrospective cohort|retrospective longitudinal cohort)\b/.test(text)){
+    return { name:'Retrospective Cohort Study', class:'design-cohort', icon:'👥' };
+  }
+  if(/\b(cohort study|cohort analysis|longitudinal study|follow-up study|inception cohort)\b/.test(text)){
     return { name:'Cohort Study', class:'design-cohort', icon:'👥' };
   }
+
+  // 9. Case-Control, Cross-Sectional, Case Series, Case Report
   if(/\b(case-control|case control|matched case)\b/.test(text)){
     return { name:'Case-Control Study', class:'design-casecontrol', icon:'⚖️' };
   }
-  if(/\b(cross-sectional|cross sectional|survey|prevalence study)\b/.test(text)){
+  if(/\b(cross-sectional|cross sectional|prevalence study)\b/.test(text)){
     return { name:'Cross-Sectional Study', class:'design-cross', icon:'📐' };
   }
-  if(/\b(in vitro|in vivo|mouse model|murine|cell line|preclinical|animal model|rat model|transgenic|knockout|crispr-cas|xenograft)\b/.test(text)){
-    return { name:'Experimental / Preclinical Study', class:'design-exp', icon:'🔬' };
+  if(/\b(case report|case presentation|single case)\b/.test(title) || pubType.includes('case report')){
+    return { name:'Case Report', class:'design-case', icon:'📝' };
   }
-  if(/\b(review|narrative review|overview|perspective|editorial|commentary|scoping review)\b/.test(text)){
-    return { name:'Narrative Review / Commentary', class:'design-review', icon:'📖' };
+  if(/\b(case series|consecutive cases|case collection)\b/.test(text)){
+    return { name:'Case Series', class:'design-case', icon:'📁' };
   }
-  return { name:'Observational / Clinical Investigation', class:'design-obs', icon:'📑' };
+
+  // 10. Population, Registry, Ecological Studies
+  if(/\b(registry-based|nationwide registry|national registry|disease registry|population register)\b/.test(text)){
+    return { name:'Registry-Based Study', class:'design-obs', icon:'🏛️' };
+  }
+  if(/\b(population-based|population based|community-based study)\b/.test(text)){
+    return { name:'Population-Based Study', class:'design-obs', icon:'🌐' };
+  }
+  if(/\b(ecological study|ecologic study|aggregate-level study)\b/.test(text)){
+    return { name:'Ecological Study', class:'design-obs', icon:'🌍' };
+  }
+
+  // 11. In Vitro & Animal Studies
+  if(/\b(in vitro|cell culture|cell line|isolated cells|ex vivo|in-vitro)\b/.test(text)){
+    return { name:'In Vitro Study', class:'design-exp', icon:'🧫' };
+  }
+  if(/\b(animal model|murine model|mouse model|rat model|in vivo animal|xenograft|canine model|swine model|rabbit model)\b/.test(text)){
+    return { name:'Animal Study', class:'design-exp', icon:'🐁' };
+  }
+
+  // 12. Comparative, Retrospective, Prospective Studies
+  if(/\b(comparative study|head-to-head comparison|comparative effectiveness|comparative analysis)\b/.test(text)){
+    return { name:'Comparative Study', class:'design-casecontrol', icon:'⚖️' };
+  }
+  if(/\b(retrospective study|retrospective analysis|retrospective chart review|retrospective review)\b/.test(text)){
+    return { name:'Retrospective Study', class:'design-cohort', icon:'🔙' };
+  }
+  if(/\b(prospective study|prospective investigation|prospective analysis)\b/.test(text)){
+    return { name:'Prospective Study', class:'design-cohort', icon:'🔜' };
+  }
+
+  // 13. Narrative Review / Reviews
+  if(/\b(narrative review|literature review|state-of-the-art review|critical review)\b/.test(text) || pubType.includes('review') || /\breview\b/.test(title)){
+    return { name:'Narrative Review', class:'design-review', icon:'📖' };
+  }
+
+  // 14. Observational Study (default / clinical human investigation)
+  return { name:'Observational Study', class:'design-obs', icon:'📑' };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2482,11 +2614,15 @@ function renderPaperCards(){
             <span style="background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex-shrink:0">${i+1}</span>
             ${getSourceBadgeHTML(paper)}
             ${getValBadgeHTML(val)}
-            <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
+            <span class="design-badge ${design.class}" title="Study Type / Design">${design.icon} Type: ${design.name}</span>
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
           </div>
           <div class="r-title">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(paper.title)} <span style="font-size:.78rem;opacity:.7">↗</span></a>` : esc(paper.title)}</div>
           <div class="r-meta">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(15,107,107,0.08);border:1px solid rgba(15,107,107,0.22);padding:2px 8px;border-radius:4px;font-size:.76rem;margin-bottom:4px">
+              <span style="color:#0a4545;font-weight:600">📋 Paper Type:</span>
+              <strong style="color:var(--accent)">${design.icon} ${esc(design.name)}</strong>
+            </div><br>
             ${esc(auth)} · ${paper.year}${paper.journal?' · <em>'+esc(paper.journal)+'</em>':''}
             ${paper.doi?'<br><span style="font-family:monospace;font-size:.76rem;color:#94a3b8">DOI: '+esc(paper.doi)+'</span>':''}
             ${paper.pmid?'<span style="font-family:monospace;font-size:.76rem;color:#94a3b8;margin-left:8px">PMID: '+esc(paper.pmid)+'</span>':''}
@@ -2826,10 +2962,11 @@ class PaperGenerator {
       const cleanTitle = cleanHtmlText(pp.title);
       const finding = this.extractFinding(pp.abstract, t);
 
+      const art = /^[aeiou]/i.test(des) ? 'an' : 'a';
       if(finding && finding.length > 30){
-        p2 += `${auth} (${pp.year}) ${this.cite(i)}, in a ${des.toLowerCase()}, evaluated ${t} and observed that ${lc(finding)} These data provide direct empirical evidence supporting the clinical appraisal of ${t}.\n\n`;
+        p2 += `${auth} (${pp.year}) ${this.cite(i)}, in ${art} ${des.toLowerCase()}, evaluated ${t} and observed that ${lc(finding)} These data provide direct empirical evidence supporting the clinical appraisal of ${t}.\n\n`;
       } else {
-        p2 += `A ${des.toLowerCase()} by ${auth} (${pp.year}) ${this.cite(i)}, entitled "${cleanTitle.substring(0, 80)}${cleanTitle.length > 80 ? '…' : ''}", evaluated clinical and experimental endpoints in ${t}, providing structured evidence regarding ${pp.journal || 'biomedical outcomes'}.\n\n`;
+        p2 += `${cap(art)} ${des.toLowerCase()} by ${auth} (${pp.year}) ${this.cite(i)}, entitled "${cleanTitle.substring(0, 80)}${cleanTitle.length > 80 ? '…' : ''}", evaluated clinical and experimental endpoints in ${t}, providing structured evidence regarding ${pp.journal || 'biomedical outcomes'}.\n\n`;
       }
     });
 
@@ -3174,7 +3311,7 @@ function renderRelevanceTab(){
             <span style="background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700">${i+1}</span>
             ${getSourceBadgeHTML(pp)}
             ${getValBadgeHTML(val)}
-            <span class="design-badge ${design.class}">${design.icon} ${design.name}</span>
+            <span class="design-badge ${design.class}" title="Study Type / Design">${design.icon} Type: ${design.name}</span>
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
           </div>
           <div style="font-size:.92rem;font-weight:600;margin-bottom:4px">
