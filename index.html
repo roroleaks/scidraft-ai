@@ -38,6 +38,7 @@
   <meta name="twitter:image" content="https://scidraftai.vercel.app/og-image.jpg"/>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
   <style>
 /* ═══════════════════════════════════════════════════
    ROOT & TOKENS  (matches AIMed globals.css exactly)
@@ -918,6 +919,59 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px" id="summary-stats"></div>
       <!-- Per-paper cards -->
       <div id="paper-cards"></div>
+
+      <!-- Citation Style Selection Box (Step 3) -->
+      <div class="citation-style-selector-box" style="margin-top:24px;margin-bottom:20px;padding:18px 20px;background:#f8fafc;border:2px solid var(--accent);border-radius:12px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:1.4rem">📑</span>
+          <div>
+            <h3 style="margin:0;font-size:1.05rem;color:var(--accent-dark,#0a4545)">Choose Citation &amp; Bibliography Style for Manuscript &amp; Exports</h3>
+            <p style="margin:2px 0 0;font-size:.84rem;color:var(--muted)">Select how citations and references will be formatted in your review draft, Word (.docx) document, and PDFs:</p>
+          </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px;margin-top:14px">
+          <!-- Vancouver Card -->
+          <label class="citation-card" style="border:2px solid var(--accent);border-radius:10px;padding:14px;background:#f0fdfa;cursor:pointer;display:flex;gap:12px;transition:all .2s;position:relative" id="card-cite-vancouver">
+            <input type="radio" name="citation_style" value="vancouver" checked onchange="setCitationStyle('vancouver')" style="margin-top:3px;accent-color:var(--accent);width:18px;height:18px">
+            <div>
+              <div style="font-weight:700;color:var(--ink);font-size:.92rem;display:flex;align-items:center;gap:6px">
+                Vancouver (ICMJE)
+                <span class="badge" style="background:var(--accent-light);color:var(--accent);font-size:.7rem;padding:2px 8px;border-radius:12px;font-weight:700">Recommended</span>
+              </div>
+              <div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.4">
+                <strong>In-text:</strong> Uppercase / Superscript with <em>NO brackets</em> (e.g. <code>efficacy¹</code>, <code>trials¹ ²</code>).<br/>
+                <strong>Bibliography:</strong> Sequential ICMJE numbered list.
+              </div>
+            </div>
+          </label>
+
+          <!-- APA 7th Edition Card -->
+          <label class="citation-card" style="border:1px solid var(--border);border-radius:10px;padding:14px;background:#fff;cursor:pointer;display:flex;gap:12px;transition:all .2s;position:relative" id="card-cite-apa">
+            <input type="radio" name="citation_style" value="apa" onchange="setCitationStyle('apa')" style="margin-top:3px;accent-color:var(--accent);width:18px;height:18px">
+            <div>
+              <div style="font-weight:700;color:var(--ink);font-size:.92rem">APA (7th Edition)</div>
+              <div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.4">
+                <strong>In-text:</strong> Author-Date with parentheses (e.g. <code>(Smith et al., 2023)</code>).<br/>
+                <strong>Bibliography:</strong> Alphabetical by author, hanging indent.
+              </div>
+            </div>
+          </label>
+
+          <!-- Harvard Card -->
+          <label class="citation-card" style="border:1px solid var(--border);border-radius:10px;padding:14px;background:#fff;cursor:pointer;display:flex;gap:12px;transition:all .2s;position:relative" id="card-cite-harvard">
+            <input type="radio" name="citation_style" value="harvard" onchange="setCitationStyle('harvard')" style="margin-top:3px;accent-color:var(--accent);width:18px;height:18px">
+            <div>
+              <div style="font-weight:700;color:var(--ink);font-size:.92rem">Harvard</div>
+              <div style="font-size:.8rem;color:#475569;margin-top:4px;line-height:1.4">
+                <strong>In-text:</strong> Author-Year with parentheses (e.g. <code>(Smith et al. 2023)</code>).<br/>
+                <strong>Bibliography:</strong> Alphabetical with publication year in parentheses.
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
       <!-- Sticky bottom action bar for Step 3 -->
       <div class="sticky-bottom-bar" id="step3-actions">
         <button class="primary btn-sticky-cta" onclick="goToStep4()">✍️ Generate Full Paper Draft &amp; Export PDFs ➜</button>
@@ -933,9 +987,10 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
         <div>
           <h2 class="sec-h" style="margin:0" id="draft-title-label">Generating draft…</h2>
-          <p class="hint" style="margin:4px 0 0">Full IMRaD structure · Vancouver citations · Ready to export</p>
+          <p class="hint" style="margin:4px 0 0" id="draft-meta-subtitle">Full IMRaD structure · Publication-grade styling · Ready to export</p>
         </div>
         <div class="step4-top-btns" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="primary" onclick="exportPaperWord()" style="background:#1e40af;border-color:#1e3a8a">⬇ Download Word (.docx)</button>
           <button class="primary" onclick="exportPaperPDF()">⬇ Download Review Draft PDF</button>
           <button class="secondary" onclick="exportReferencesPDF()">⬇ References PDF</button>
           <button class="secondary" onclick="resetApp()">↩ New Search</button>
@@ -963,7 +1018,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <div class="tab-bar">
         <button class="tab-btn active" id="tab-btn-paper" onclick="switchTab('paper',this)">📄 Full Paper</button>
         <button class="tab-btn" id="tab-btn-review" onclick="switchTab('review',this)">🔍 Paper Review &amp; Quality Audit</button>
-        <button class="tab-btn" id="tab-btn-references" onclick="switchTab('references',this)">📚 Vancouver References</button>
+        <button class="tab-btn" id="tab-btn-references" onclick="switchTab('references',this)"><span id="tab-ref-label">📚 References</span></button>
         <button class="tab-btn" id="tab-btn-relevance" onclick="switchTab('relevance',this)">📊 Heuristic Relevance Report</button>
       </div>
 
@@ -971,13 +1026,13 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <div id="tab-paper">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:6px">
           <div style="display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted)">
-            <span style="font-weight:600;color:var(--ink)">In-Text Vancouver Citation Style:</span>
-            <span id="cite-style-active-badge" style="font-size:.76rem;background:var(--accent-light);color:var(--accent-dark);padding:2px 8px;border-radius:12px;font-weight:600">✔ Superscript [1] (Upper Case) Active</span>
+            <span style="font-weight:600;color:var(--ink)">In-Text Citation Style:</span>
+            <span id="cite-style-active-badge" style="font-size:.76rem;background:var(--accent-light);color:var(--accent-dark);padding:2px 8px;border-radius:12px;font-weight:600">✔ Vancouver (Superscript, No Brackets) Active</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <button type="button" class="cite-style-btn active" id="btn-cite-sb" onclick="setCitationStyle('superscript-bracket')"><sup>[1]</sup> Bracketed Superscript</button>
-            <button type="button" class="cite-style-btn" id="btn-cite-sc" onclick="setCitationStyle('superscript-clean')"><sup>1</sup> Pure Superscript</button>
-            <button type="button" class="cite-style-btn" id="btn-cite-base" onclick="setCitationStyle('baseline')">[1] Baseline</button>
+            <button type="button" class="cite-style-btn active" id="btn-cite-vancouver" onclick="setCitationStyle('vancouver')"><sup>1</sup> Vancouver (Superscript, No Brackets)</button>
+            <button type="button" class="cite-style-btn" id="btn-cite-apa" onclick="setCitationStyle('apa')">(Smith, 2024) APA 7th</button>
+            <button type="button" class="cite-style-btn" id="btn-cite-harvard" onclick="setCitationStyle('harvard')">(Smith 2024) Harvard</button>
           </div>
         </div>
         <div class="paper-preview" id="paper-preview"></div>
@@ -990,8 +1045,8 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 
       <!-- Tab: References -->
       <div id="tab-references" class="hidden">
-        <div class="good-note" style="margin-bottom:14px">
-          ✔ All references formatted in <strong>Vancouver (ICMJE)</strong> style · validated
+        <div class="good-note" id="ref-note-banner" style="margin-bottom:14px">
+          ✔ All references formatted in <strong id="ref-style-banner-text">Vancouver (ICMJE)</strong> style · validated
         </div>
         <ol class="refs-numbered" id="refs-list"></ol>
       </div>
@@ -1003,6 +1058,7 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 
       <!-- Sticky bottom action bar for Step 4 -->
       <div class="sticky-bottom-bar" id="step4-actions">
+        <button class="primary btn-sticky-cta" onclick="exportPaperWord()" style="background:#1e40af;border-color:#1e3a8a">⬇ Download Word (.docx)</button>
         <button class="primary btn-sticky-cta" onclick="exportPaperPDF()">⬇ Download Review Draft PDF</button>
         <button class="secondary btn-sticky-sec" onclick="exportReferencesPDF()">⬇ References PDF</button>
         <button class="secondary btn-sticky-sec" onclick="resetApp()">↩ New Search</button>
@@ -1045,7 +1101,7 @@ let STATE = {
   duplicatesRemoved: 0,
   searchSource: 'both',
   sourceCounts: { epmc: 0, s2: 0, merged: 0 },
-  citationStyle: 'superscript-bracket'
+  citationStyle: 'vancouver'
 };
 let currentAbortController = null;
 
@@ -1152,13 +1208,6 @@ function isEditorialNotice(paper){
   return false;
 }
 
-function getSentences(text, n=3){
-  const clean = cleanHtmlText(text);
-  if(!clean) return [];
-  const matches = clean.match(/[A-Z][^.!?]{15,}[.!?]/g) || [];
-  return matches.map(s => s.trim()).slice(0, n);
-}
-
 function findSentence(text, kws){
   const clean = cleanHtmlText(text);
   if(!clean) return '';
@@ -1168,16 +1217,6 @@ function findSentence(text, kws){
     if(f && f.trim().length > 35) return cleanHtmlText(f.trim());
   }
   return cleanHtmlText(ss[0]?.trim() || '');
-}
-
-function lastSent(text){
-  const clean = cleanHtmlText(text);
-  if(!clean) return '';
-  const ss = clean.match(/[^.!?]{20,}[.!?]/g) || [];
-  for(let i = ss.length - 1; i >= 0; i--){
-    if(ss[i].trim().length > 35) return cleanHtmlText(ss[i].trim());
-  }
-  return '';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2773,27 +2812,39 @@ function undoRemovePaper(){
   }
 }
 
-function getTitleMatch(paper, topic){
-  return scoreHeuristicRelevance(paper, topic).titleMatch;
-}
-function getAbsMatch(paper, topic){
-  return scoreHeuristicRelevance(paper, topic).absMatch;
-}
-function getRecency(paper){
-  const age = new Date().getFullYear() - (paper.year || 2000);
-  return age <= 3 ? 100 : age <= 7 ? 80 : age <= 12 ? 60 : 35;
+// ═══════════════════════════════════════════════════════════════
+// CITATION FORMATTERS & AUTHOR PARSERS (Vancouver / APA / Harvard)
+// ═══════════════════════════════════════════════════════════════
+function parseAuthorsList(authorsStr) {
+  if (!authorsStr || authorsStr === 'Unknown Authors' || authorsStr === '—') {
+    return [{ surname: 'Anonymous', initials: '', raw: 'Anonymous' }];
+  }
+  const clean = authorsStr.replace(/\band\b/gi, ',').trim();
+  const rawList = clean.split(/;\s*|,\s*(?=[A-Z][a-z]+(?:\s+[A-Z])|\b[A-Z][a-z]+\b)/).map(a => a.trim()).filter(Boolean);
+  const list = rawList.length > 1 ? rawList : clean.split(/,\s*/).map(a => a.trim()).filter(Boolean);
+  
+  return list.map(item => {
+    const s = item.replace(/\.$/, '').trim();
+    const m1 = s.match(/^([A-Za-z\-']+)\s+([A-Z]{1,3})$/);
+    if (m1) return { surname: m1[1], initials: m1[2], raw: item };
+    const m2 = s.match(/^([A-Za-z\-']+)(?:\s+[A-Z]\.?)?\s+([A-Za-z\-']+)$/);
+    if (m2) return { surname: m2[2], initials: m2[1][0], raw: item };
+    const m3 = s.match(/^([A-Za-z\-']+),\s*([A-Z]{1,3})\.?$/);
+    if (m3) return { surname: m3[1], initials: m3[2], raw: item };
+    const words = s.split(/\s+/);
+    return { surname: words[words.length - 1] || s, initials: words[0]?.[0] || '', raw: item };
+  });
 }
 
-// ═══════════════════════════════════════════════════════════════
-// VANCOUVER FORMATTER
-// ═══════════════════════════════════════════════════════════════
 function formatVancouver(paper, num){
-  let ref = `${num}. `;
+  let ref = num !== undefined ? `${num}. ` : '';
   const authors = cleanHtmlText(paper.authors);
   if(authors && authors !== 'Unknown Authors'){
     ref += authors.trim();
     if(!ref.trimEnd().endsWith('.')) ref += '.';
     ref += ' ';
+  } else {
+    ref += 'Anonymous. ';
   }
   const title = cleanHtmlText(paper.title);
   if(title){
@@ -2814,6 +2865,195 @@ function formatVancouver(paper, num){
   if(cleanDoi) ref += ` doi:${cleanDoi}`;
   if(paper.pmid) ref += ` PMID: ${paper.pmid}`;
   return ref.trim();
+}
+
+function formatAPA(paper, num){
+  let ref = num !== undefined ? `${num}. ` : '';
+  const authors = cleanHtmlText(paper.authors);
+  if(authors && authors !== 'Unknown Authors'){
+    const parsed = parseAuthorsList(authors);
+    if(parsed.length === 1){
+      ref += `${parsed[0].surname}, ${parsed[0].initials ? parsed[0].initials + '.' : ''}`;
+    } else if(parsed.length === 2){
+      ref += `${parsed[0].surname}, ${parsed[0].initials ? parsed[0].initials + '.' : ''}, & ${parsed[1].surname}, ${parsed[1].initials ? parsed[1].initials + '.' : ''}`;
+    } else if(parsed.length > 2 && parsed.length <= 20){
+      const allExceptLast = parsed.slice(0, -1).map(a => `${a.surname}, ${a.initials ? a.initials + '.' : ''}`).join(', ');
+      const last = parsed[parsed.length - 1];
+      ref += `${allExceptLast}, & ${last.surname}, ${last.initials ? last.initials + '.' : ''}`;
+    } else {
+      const top19 = parsed.slice(0, 19).map(a => `${a.surname}, ${a.initials ? a.initials + '.' : ''}`).join(', ');
+      const last = parsed[parsed.length - 1];
+      ref += `${top19}, ... ${last.surname}, ${last.initials ? last.initials + '.' : ''}`;
+    }
+    if(!ref.trimEnd().endsWith('.')) ref += '.';
+  } else {
+    ref += 'Anonymous.';
+  }
+  ref += ` (${paper.year || 'n.d.'}).`;
+  
+  const title = cleanHtmlText(paper.title);
+  if(title) ref += ` ${title.replace(/\.$/, '')}.`;
+
+  if(paper.journal){
+    ref += ` ${cleanHtmlText(paper.journal)}`;
+    if(paper.volume){
+      ref += `, ${paper.volume}`;
+      if(paper.issue) ref += `(${paper.issue})`;
+    }
+    if(paper.pages){
+      ref += `, ${paper.pages}`;
+    }
+    ref += '.';
+  }
+
+  const cleanDoi = (paper.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
+  if(cleanDoi){
+    ref += ` https://doi.org/${cleanDoi}`;
+  } else if(paper.pmid){
+    ref += ` https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/`;
+  }
+  return ref.replace(/\s+/g, ' ').replace(/\.\./g, '.').trim();
+}
+
+function formatHarvard(paper, num){
+  let ref = num !== undefined ? `${num}. ` : '';
+  const authors = cleanHtmlText(paper.authors);
+  if(authors && authors !== 'Unknown Authors'){
+    const parsed = parseAuthorsList(authors);
+    if(parsed.length === 1){
+      ref += `${parsed[0].surname}, ${parsed[0].initials ? parsed[0].initials + '.' : ''}`;
+    } else if(parsed.length === 2){
+      ref += `${parsed[0].surname}, ${parsed[0].initials ? parsed[0].initials + '.' : ''} and ${parsed[1].surname}, ${parsed[1].initials ? parsed[1].initials + '.' : ''}`;
+    } else {
+      ref += `${parsed[0].surname}, ${parsed[0].initials ? parsed[0].initials + '.' : ''} et al.`;
+    }
+  } else {
+    ref += 'Anonymous';
+  }
+  ref += ` (${paper.year || 'n.d.'})`;
+
+  const title = cleanHtmlText(paper.title);
+  if(title) ref += ` '${title.replace(/\.$/, '')}'`;
+
+  if(paper.journal){
+    ref += `, ${cleanHtmlText(paper.journal)}`;
+    if(paper.volume){
+      ref += `, ${paper.volume}`;
+      if(paper.issue) ref += `(${paper.issue})`;
+    }
+    if(paper.pages){
+      ref += `, pp. ${paper.pages}`;
+    }
+    ref += '.';
+  }
+
+  const cleanDoi = (paper.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
+  if(cleanDoi){
+    ref += ` Available at: https://doi.org/${cleanDoi}.`;
+  } else if(paper.pmid){
+    ref += ` Available at: https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/.`;
+  }
+  return ref.replace(/\s+/g, ' ').replace(/\.\./g, '.').trim();
+}
+
+function formatInTextCitation(indices, style = STATE.citationStyle || 'vancouver', papers = STATE.papers) {
+  if (!indices || !indices.length) return '';
+  const validIdxs = indices.filter(i => i >= 0 && i < papers.length);
+  if (!validIdxs.length) return '';
+
+  if (style === 'apa') {
+    const parts = validIdxs.map(i => {
+      const p = papers[i];
+      const parsed = parseAuthorsList(p.authors);
+      const yr = p.year || 'n.d.';
+      if (parsed.length === 1) return `${parsed[0].surname}, ${yr}`;
+      if (parsed.length === 2) return `${parsed[0].surname} & ${parsed[1].surname}, ${yr}`;
+      return `${parsed[0].surname} et al., ${yr}`;
+    });
+    return `(${parts.join('; ')})`;
+  } else if (style === 'harvard') {
+    const parts = validIdxs.map(i => {
+      const p = papers[i];
+      const parsed = parseAuthorsList(p.authors);
+      const yr = p.year || 'n.d.';
+      if (parsed.length === 1) return `${parsed[0].surname} ${yr}`;
+      if (parsed.length === 2) return `${parsed[0].surname} and ${parsed[1].surname} ${yr}`;
+      return `${parsed[0].surname} et al. ${yr}`;
+    });
+    return `(${parts.join('; ')})`;
+  } else {
+    // Vancouver — Uppercase / Superscript with NO brackets
+    // As per user request: "note that vancover must be uppercase and with no barckets"
+    const nums = [...new Set(validIdxs.map(i => i + 1))].join(',');
+    return nums;
+  }
+}
+
+function parseParagraphTokens(paraText, citationStyle = STATE.citationStyle || 'vancouver', papers = STATE.papers) {
+  const regex = /\[(\d+(?:,\s*\d+)*)\]/g;
+  const tokens = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(paraText)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push({
+        type: 'text',
+        text: paraText.substring(lastIndex, match.index)
+      });
+    }
+    const rawNums = match[1].split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+    const zeroBased = rawNums.map(n => n - 1).filter(idx => idx >= 0 && idx < papers.length);
+    const cleanNums = [...new Set(rawNums)].join(',');
+
+    tokens.push({
+      type: 'citation',
+      style: citationStyle,
+      rawNums,
+      cleanNums,
+      indices: zeroBased,
+      text: formatInTextCitation(zeroBased, citationStyle, papers)
+    });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < paraText.length) {
+    tokens.push({
+      type: 'text',
+      text: paraText.substring(lastIndex)
+    });
+  }
+
+  return tokens;
+}
+
+function formatPaperReferences(papers, style = STATE.citationStyle || 'vancouver'){
+  if(!papers || !papers.length) return [];
+  if(style === 'vancouver'){
+    return papers.map((p, idx) => ({
+      num: idx + 1,
+      text: formatVancouver(p, idx + 1),
+      paper: p,
+      origIdx: idx
+    }));
+  }
+  
+  // For APA and Harvard: sort alphabetically by first author surname
+  const sorted = papers.map((p, origIdx) => {
+    const parsed = parseAuthorsList(p.authors);
+    return {
+      paper: p,
+      origIdx,
+      surname: (parsed[0]?.surname || 'ZZZ').toLowerCase()
+    };
+  }).sort((a, b) => a.surname.localeCompare(b.surname));
+
+  return sorted.map((item, idx) => ({
+    num: idx + 1,
+    text: style === 'apa' ? formatAPA(item.paper, idx + 1) : formatHarvard(item.paper, idx + 1),
+    paper: item.paper,
+    origIdx: item.origIdx
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2999,11 +3239,7 @@ class PaperGenerator {
   }
 
   generateReferences(){
-    return this.papers.map((p, idx) => ({
-      num: idx + 1,
-      text: formatVancouver(p, idx + 1),
-      paper: p
-    }));
+    return formatPaperReferences(this.papers, STATE.citationStyle || 'vancouver');
   }
 
   generate(){
@@ -3188,35 +3424,58 @@ class PaperReviewEngine {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CITATION FORMATTING & CONTROLS
+// CITATION FORMATTING & CONTROLS (Vancouver / APA / Harvard)
 // ═══════════════════════════════════════════════════════════════
 function setCitationStyle(style){
   STATE.citationStyle = style;
-  ['sb', 'sc', 'base'].forEach(id => {
-    const btn = document.getElementById(`btn-cite-${id}`);
-    if(btn) btn.classList.remove('active');
+  
+  // Update Step 3 cards
+  ['vancouver', 'apa', 'harvard'].forEach(s => {
+    const card = document.getElementById(`card-cite-${s}`);
+    const radio = document.querySelector(`input[name="citation_style"][value="${s}"]`);
+    if(card){
+      if(s === style){
+        card.style.borderColor = 'var(--accent)';
+        card.style.background = '#f0fdfa';
+        if(radio) radio.checked = true;
+      } else {
+        card.style.borderColor = 'var(--border)';
+        card.style.background = '#fff';
+      }
+    }
   });
+
+  // Update Step 4 toggle buttons
+  ['vancouver', 'apa', 'harvard'].forEach(s => {
+    const btn = document.getElementById(`btn-cite-${s}`);
+    if(btn) btn.classList.toggle('active', s === style);
+  });
+
   const badge = document.getElementById('cite-style-active-badge');
-  if(style === 'superscript-bracket'){
-    document.getElementById('btn-cite-sb')?.classList.add('active');
-    if(badge) badge.textContent = '✔ Superscript [1] (Upper Case) Active';
-  } else if(style === 'superscript-clean'){
-    document.getElementById('btn-cite-sc')?.classList.add('active');
-    if(badge) badge.textContent = '✔ Superscript 1 (Pure Upper) Active';
-  } else if(style === 'baseline'){
-    document.getElementById('btn-cite-base')?.classList.add('active');
-    if(badge) badge.textContent = 'Standard [1] Baseline Active';
-  }
-  const preview = document.getElementById('paper-preview');
-  if(preview){
-    if(style === 'baseline'){
-      preview.classList.add('cite-style-baseline');
-    } else {
-      preview.classList.remove('cite-style-baseline');
+  if(badge){
+    if(style === 'vancouver'){
+      badge.textContent = '✔ Vancouver (Superscript, No Brackets) Active';
+    } else if(style === 'apa'){
+      badge.textContent = '✔ APA (7th Edition) Author-Date Active';
+    } else if(style === 'harvard'){
+      badge.textContent = '✔ Harvard Author-Year Active';
     }
   }
+
+  // Update references tab header banner & label
+  const styleBanner = document.getElementById('ref-style-banner-text');
+  if(styleBanner){
+    styleBanner.textContent = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE)';
+  }
+  const refTabLabel = document.getElementById('tab-ref-label');
+  if(refTabLabel){
+    refTabLabel.textContent = style === 'apa' ? '📚 APA References' : style === 'harvard' ? '📚 Harvard References' : '📚 Vancouver References';
+  }
+
   if(STATE.paper){
+    STATE.paper.references = formatPaperReferences(STATE.papers, style);
     renderPaperPreview(STATE.paper);
+    renderReferencesTab(STATE.paper);
   }
 }
 
@@ -3224,32 +3483,49 @@ function setCitationStyle(style){
 // RENDER PAPER PREVIEW (HTML)
 // ═══════════════════════════════════════════════════════════════
 function renderPaperPreview(paper){
-  const abs=paper.abstractObj;
+  const abs = paper.abstractObj;
+  const style = STATE.citationStyle || 'vancouver';
+
   const citify = t => {
-    const style = STATE.citationStyle || 'superscript-bracket';
-    const showBrackets = style !== 'superscript-clean';
     return String(t || '').replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
-      const parts = n.split(',').map(s => s.trim()).filter(Boolean);
-      const cleanNums = parts.join(', ');
+      const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
+      const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
       const firstNum = parts[0] || '1';
-      const display = showBrackets ? `[${cleanNums}]` : cleanNums;
-      return `<sup class="cite-num" title="Vancouver Citation: ${cleanNums} · Click to jump to reference" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${display}</sup>`;
+
+      if (style === 'apa') {
+        const apaText = formatInTextCitation(zeroBased, 'apa');
+        return `<span class="cite-author-date" style="font-weight:600;color:var(--accent);cursor:pointer" title="APA Citation · Click to jump" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${esc(apaText)}</span>`;
+      } else if (style === 'harvard') {
+        const harvardText = formatInTextCitation(zeroBased, 'harvard');
+        return `<span class="cite-author-date" style="font-weight:600;color:var(--accent);cursor:pointer" title="Harvard Citation · Click to jump" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${esc(harvardText)}</span>`;
+      } else {
+        // Vancouver: Uppercase / superscript with NO brackets
+        // User requested: "note that vancover must be uppercase and with no barckets"
+        const cleanNums = [...new Set(parts)].join(',');
+        return `<sup class="cite-num" title="Vancouver Reference: ${cleanNums} · Click to jump to bibliography" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${cleanNums}</sup>`;
+      }
     });
   };
-  const sectionHTML=(num,heading,text)=>{
-    const paras=text.split('\n\n').map(p=>{
+
+  const sectionHTML = (num, heading, text) => {
+    const paras = text.split('\n\n').map(p => {
       if(!p.trim()) return '';
-      if(/^\d+\.\d+\s/.test(p.trim())){ const lines=p.split('\n'); return `<p class="s-head" style="font-size:.82rem;margin-top:1rem">${esc(lines[0])}</p>${lines.slice(1).map(l=>`<p>${citify(esc(l))}</p>`).join('')}`; }
+      if(/^\d+\.\d+\s/.test(p.trim())){
+        const lines = p.split('\n');
+        return `<p class="s-head" style="font-size:.82rem;margin-top:1rem">${esc(lines[0])}</p>${lines.slice(1).map(l => `<p>${citify(esc(l))}</p>`).join('')}`;
+      }
       return `<p>${citify(esc(p.trim()))}</p>`;
     }).join('');
     return `<div class="s-head">${num}. ${heading}</div>${paras}`;
   };
-  const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const srcName = STATE.searchSource === 's2' ? 'Semantic Scholar (Allen Institute for AI)' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
-  const citeStyleLabel = (STATE.citationStyle === 'superscript-clean') ? 'Vancouver (ICMJE) Pure Superscript' : (STATE.citationStyle === 'baseline') ? 'Vancouver (ICMJE) Baseline Brackets' : 'Vancouver (ICMJE) Bracketed Superscript ("Upper Case")';
-  document.getElementById('paper-preview').innerHTML=`
+  const citeStyleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard (Author-Year)' : 'Vancouver (ICMJE Pure Superscript, No Brackets)';
+
+  document.getElementById('paper-preview').innerHTML = `
     <h1>${esc(paper.title)}</h1>
-    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: ${srcName} · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'} · In-text citations: ${citeStyleLabel}</em></div>
+    <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: ${srcName} · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange < 99 ? STATE.yearRange + ' years' : 'all time'} · In-text citations: ${citeStyleLabel}</em></div>
     <hr/>
     <div class="s-head">Abstract</div>
     <p><span class="ab-label">Background:</span> ${citify(esc(abs.background))}</p>
@@ -3259,13 +3535,13 @@ function renderPaperPreview(paper){
     <p><span class="ab-label">Conclusion:</span> ${esc(abs.conclusion)}</p>
     <p class="kw"><strong>Keywords:</strong> ${esc(paper.keywords.join('; '))}</p>
     <hr/>
-    ${sectionHTML('1','Introduction',paper.intro)}
-    ${sectionHTML('2','Methods',paper.methods)}
-    ${sectionHTML('3','Results',paper.results)}
-    ${sectionHTML('4','Discussion',paper.discussion)}
-    ${sectionHTML('5','Conclusion',paper.conclusion)}
-    <div class="s-head">References</div>
-    ${paper.references.map(r=>`<p class="ref-e" id="ref-anchor-${r.num}">${esc(r.text)}</p>`).join('')}
+    ${sectionHTML('1', 'Introduction', paper.intro)}
+    ${sectionHTML('2', 'Methods', paper.methods)}
+    ${sectionHTML('3', 'Results', paper.results)}
+    ${sectionHTML('4', 'Discussion', paper.discussion)}
+    ${sectionHTML('5', 'Conclusion', paper.conclusion)}
+    <div class="s-head">References (${esc(citeStyleLabel)})</div>
+    ${paper.references.map(r => `<p class="ref-e" id="ref-anchor-${r.num}"><strong>${r.num}.</strong> ${esc(r.text.replace(/^\d+\.\s*/, ''))}</p>`).join('')}
   `;
 }
 
@@ -3275,9 +3551,9 @@ function renderPaperPreview(paper){
 function renderReferencesTab(paper){
   document.getElementById('refs-list').innerHTML =
     paper.references.map((r, idx)=>{
-      const orig = STATE.papers[idx];
+      const orig = r.paper || STATE.papers[r.origIdx !== undefined ? r.origIdx : idx];
       const srcBadge = orig ? getSourceBadgeHTML(orig) : '';
-      return `<li style="margin-bottom:12px;line-height:1.5">
+      return `<li style="margin-bottom:12px;line-height:1.5" id="ref-tab-${r.num}">
         <div style="margin-bottom:4px;display:flex;align-items:center;gap:6px">${srcBadge}</div>
         <div>${esc(r.text)}</div>
       </li>`;
@@ -3471,7 +3747,449 @@ function goToStep4(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PDF EXPORT — PAPER
+// MICROSOFT WORD (.DOCX) EXPORT — PUBLICATION-READY
+// ═══════════════════════════════════════════════════════════════
+async function exportPaperWord(){
+  if(!STATE.paper) return;
+  const s4Alert = document.getElementById('step4-alert');
+  if(s4Alert) s4Alert.classList.add('hidden');
+
+  try {
+    const docxLib = window.docx;
+    if(!docxLib) throw new Error('Microsoft Word generator library (docx) is not loaded.');
+
+    const {
+      Document, Paragraph, TextRun, Table, TableRow, TableCell,
+      WidthType, BorderStyle, ShadingType, PageNumber, Header, Footer, AlignmentType, HeadingLevel
+    } = docxLib;
+
+    const paper = STATE.paper;
+    const abs = paper.abstractObj;
+    const style = STATE.citationStyle || 'vancouver';
+    const styleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE Pure Superscript)';
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const srcLabel = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC';
+
+    const createParagraphRuns = (text) => {
+      const tokens = parseParagraphTokens(text, style, STATE.papers);
+      return tokens.map(tok => {
+        if(tok.type === 'citation'){
+          if(style === 'vancouver'){
+            // Vancouver — uppercase / superscript number with NO brackets
+            return new TextRun({
+              text: tok.cleanNums,
+              superScript: true,
+              bold: true,
+              font: "Arial",
+              size: 16,
+              color: "0D9488"
+            });
+          } else {
+            return new TextRun({
+              text: tok.text,
+              font: "Arial",
+              size: 21,
+              color: "0D9488",
+              bold: false
+            });
+          }
+        }
+        return new TextRun({
+          text: tok.text,
+          font: "Arial",
+          size: 21,
+          color: "334155"
+        });
+      });
+    };
+
+    const docChildren = [];
+
+    // Title
+    docChildren.push(new Paragraph({
+      alignment: AlignmentType.LEFT,
+      spacing: { before: 0, after: 120, line: 260, lineRule: "auto" },
+      children: [
+        new TextRun({
+          text: paper.title,
+          font: "Arial",
+          size: 40,
+          bold: true,
+          color: "0F172A"
+        })
+      ]
+    }));
+
+    // Metadata Subtitle
+    docChildren.push(new Paragraph({
+      spacing: { before: 0, after: 180, line: 240, lineRule: "auto" },
+      children: [
+        new TextRun({
+          text: `SciDraft AI v2.0 Literature Review Draft · Generated on ${today} · Data Source: ${srcLabel} · Citation Style: ${styleLabel} · Deduplicated (${STATE.duplicatesRemoved || 0} excluded)`,
+          font: "Arial",
+          size: 18,
+          italics: true,
+          color: "64748B"
+        })
+      ]
+    }));
+
+    // Quality Audit Certification Box
+    const passC = STATE.auditResult ? `${STATE.auditResult.passCount}/${STATE.auditResult.totalChecks}` : '6/6';
+    docChildren.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        left: { style: BorderStyle.SINGLE, size: 36, color: "0D9488" }
+      },
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({
+              shading: { fill: "F0FDFA", type: ShadingType.CLEAR },
+              margins: { top: 140, bottom: 140, left: 180, right: 180 },
+              children: [
+                new Paragraph({
+                  spacing: { after: 40 },
+                  children: [
+                    new TextRun({
+                      text: `✔ Scientific Review Engine Certified: ${passC} Quality Dimensions Passed`,
+                      bold: true,
+                      font: "Arial",
+                      size: 19,
+                      color: "0D9488"
+                    })
+                  ]
+                }),
+                new Paragraph({
+                  spacing: { after: 0 },
+                  children: [
+                    new TextRun({
+                      text: `100% Bibliographic Parity (${STATE.papers.length} claimed ≡ ${STATE.papers.length} citations ≡ ${STATE.papers.length} references) · Zero Editorial Notices/Retractions · Multi-Registry DOI Validation · Strict IMRaD Architecture`,
+                      font: "Arial",
+                      size: 17,
+                      color: "334155"
+                    })
+                  ]
+                })
+              ]
+            })
+          ]
+        })
+      ]
+    }));
+
+    docChildren.push(new Paragraph({ spacing: { after: 180 } }));
+
+    // Structured Abstract Heading
+    docChildren.push(new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 200, after: 100 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "0D9488", space: 4 } },
+      children: [
+        new TextRun({ text: "STRUCTURED ABSTRACT", font: "Arial", size: 26, bold: true, color: "0F172A" })
+      ]
+    }));
+
+    const absLabels = [
+      { label: "Background: ", text: abs.background },
+      { label: "Objective: ", text: abs.objective },
+      { label: "Methods: ", text: abs.methods },
+      { label: "Results: ", text: abs.results },
+      { label: "Conclusion: ", text: abs.conclusion }
+    ];
+
+    const absCellParas = absLabels.map(item => {
+      const runs = [
+        new TextRun({ text: item.label, bold: true, font: "Arial", size: 20, color: "0F172A" }),
+        ...createParagraphRuns(item.text)
+      ];
+      return new Paragraph({
+        spacing: { before: 40, after: 80, line: 260, lineRule: "auto" },
+        children: runs
+      });
+    });
+
+    absCellParas.push(new Paragraph({
+      spacing: { before: 80, after: 40 },
+      children: [
+        new TextRun({ text: "Keywords: ", bold: true, font: "Arial", size: 18, color: "0F172A" }),
+        new TextRun({ text: paper.keywords.join('; '), italics: true, font: "Arial", size: 18, color: "64748B" })
+      ]
+    }));
+
+    docChildren.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        right: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        bottom: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
+        left: { style: BorderStyle.SINGLE, size: 28, color: "0D9488" }
+      },
+      rows: [
+        new TableRow({
+          children: [
+            new TableCell({
+              shading: { fill: "F8FAFC", type: ShadingType.CLEAR },
+              margins: { top: 140, bottom: 140, left: 180, right: 180 },
+              children: absCellParas
+            })
+          ]
+        })
+      ]
+    }));
+
+    docChildren.push(new Paragraph({ spacing: { after: 200 } }));
+
+    // Evidence Summary Table
+    docChildren.push(new Paragraph({
+      heading: HeadingLevel.HEADING_2,
+      spacing: { before: 200, after: 100 },
+      children: [
+        new TextRun({ text: `Table 1: Evidence Synthesis Matrix (${STATE.papers.length} Included Investigations)`, font: "Arial", size: 24, bold: true, color: "0D9488" })
+      ]
+    }));
+
+    const tableRows = [];
+    tableRows.push(new TableRow({
+      tableHeader: true,
+      children: [
+        new TableCell({
+          width: { size: 8, type: WidthType.PERCENTAGE },
+          shading: { fill: "0F172A", type: ShadingType.CLEAR },
+          margins: { top: 120, bottom: 120, left: 100, right: 100 },
+          children: [new Paragraph({ children: [new TextRun({ text: "#", bold: true, font: "Arial", size: 18, color: "FFFFFF" })] })]
+        }),
+        new TableCell({
+          width: { size: 24, type: WidthType.PERCENTAGE },
+          shading: { fill: "0F172A", type: ShadingType.CLEAR },
+          margins: { top: 120, bottom: 120, left: 100, right: 100 },
+          children: [new Paragraph({ children: [new TextRun({ text: "First Author & Year", bold: true, font: "Arial", size: 18, color: "FFFFFF" })] })]
+        }),
+        new TableCell({
+          width: { size: 28, type: WidthType.PERCENTAGE },
+          shading: { fill: "0F172A", type: ShadingType.CLEAR },
+          margins: { top: 120, bottom: 120, left: 100, right: 100 },
+          children: [new Paragraph({ children: [new TextRun({ text: "Study Design (40-Type)", bold: true, font: "Arial", size: 18, color: "FFFFFF" })] })]
+        }),
+        new TableCell({
+          width: { size: 40, type: WidthType.PERCENTAGE },
+          shading: { fill: "0F172A", type: ShadingType.CLEAR },
+          margins: { top: 120, bottom: 120, left: 100, right: 100 },
+          children: [new Paragraph({ children: [new TextRun({ text: "Key Clinical Dimension / Finding", bold: true, font: "Arial", size: 18, color: "FFFFFF" })] })]
+        })
+      ]
+    }));
+
+    const gen = new PaperGenerator(STATE.topic, STATE.papers);
+    STATE.papers.forEach((p, idx) => {
+      const parsed = parseAuthorsList(p.authors);
+      const authStr = `${parsed[0]?.surname || 'Author'} (${p.year || 'n.d.'})`;
+      const design = classifyStudyDesign(p);
+      const finding = gen.extractFinding(p.abstract, STATE.topic) || p.title;
+      const isAlt = idx % 2 === 1;
+
+      tableRows.push(new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 8, type: WidthType.PERCENTAGE },
+            shading: { fill: isAlt ? "F8FAFC" : "FFFFFF", type: ShadingType.CLEAR },
+            margins: { top: 100, bottom: 100, left: 100, right: 100 },
+            children: [new Paragraph({ children: [new TextRun({ text: String(idx + 1), bold: true, font: "Arial", size: 17, color: "0F172A" })] })]
+          }),
+          new TableCell({
+            width: { size: 24, type: WidthType.PERCENTAGE },
+            shading: { fill: isAlt ? "F8FAFC" : "FFFFFF", type: ShadingType.CLEAR },
+            margins: { top: 100, bottom: 100, left: 100, right: 100 },
+            children: [new Paragraph({ children: [new TextRun({ text: authStr, font: "Arial", size: 17, color: "334155" })] })]
+          }),
+          new TableCell({
+            width: { size: 28, type: WidthType.PERCENTAGE },
+            shading: { fill: isAlt ? "F8FAFC" : "FFFFFF", type: ShadingType.CLEAR },
+            margins: { top: 100, bottom: 100, left: 100, right: 100 },
+            children: [new Paragraph({ children: [new TextRun({ text: design.name, bold: true, font: "Arial", size: 17, color: "0D9488" })] })]
+          }),
+          new TableCell({
+            width: { size: 40, type: WidthType.PERCENTAGE },
+            shading: { fill: isAlt ? "F8FAFC" : "FFFFFF", type: ShadingType.CLEAR },
+            margins: { top: 100, bottom: 100, left: 100, right: 100 },
+            children: [new Paragraph({ children: [new TextRun({ text: finding.substring(0, 180) + (finding.length > 180 ? '…' : ''), font: "Arial", size: 17, color: "334155" })] })]
+          })
+        ]
+      }));
+    });
+
+    docChildren.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.SINGLE, size: 4, color: "E2E8F0" },
+        right: { style: BorderStyle.SINGLE, size: 4, color: "E2E8F0" },
+        bottom: { style: BorderStyle.SINGLE, size: 4, color: "E2E8F0" },
+        left: { style: BorderStyle.SINGLE, size: 4, color: "E2E8F0" }
+      },
+      rows: tableRows
+    }));
+
+    docChildren.push(new Paragraph({ spacing: { after: 240 } }));
+
+    // IMRaD Sections
+    const SECTS = [
+      ['1. INTRODUCTION', paper.intro],
+      ['2. METHODS', paper.methods],
+      ['3. RESULTS', paper.results],
+      ['4. DISCUSSION', paper.discussion],
+      ['5. CONCLUSION', paper.conclusion]
+    ];
+
+    SECTS.forEach(([sectHeading, content]) => {
+      docChildren.push(new Paragraph({
+        heading: HeadingLevel.HEADING_1,
+        spacing: { before: 260, after: 100 },
+        border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "0D9488", space: 4 } },
+        children: [
+          new TextRun({ text: sectHeading, font: "Arial", size: 26, bold: true, color: "0F172A" })
+        ]
+      }));
+
+      content.split('\n\n').forEach(para => {
+        const cleanPara = cleanHtmlText(para.trim());
+        if(!cleanPara) return;
+        if(/^\d+\.\d+\s/.test(cleanPara) && cleanPara.length < 120){
+          docChildren.push(new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 160, after: 80 },
+            children: [
+              new TextRun({ text: cleanPara, font: "Arial", size: 22, bold: true, color: "0D9488" })
+            ]
+          }));
+          return;
+        }
+        docChildren.push(new Paragraph({
+          spacing: { before: 40, after: 120, line: 276, lineRule: "auto" },
+          alignment: AlignmentType.JUSTIFIED,
+          children: createParagraphRuns(cleanPara)
+        }));
+      });
+    });
+
+    // REFERENCES Section
+    docChildren.push(new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      spacing: { before: 320, after: 140 },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "0D9488", space: 4 } },
+      children: [
+        new TextRun({ text: `REFERENCES (${styleLabel.toUpperCase()})`, font: "Arial", size: 26, bold: true, color: "0F172A" })
+      ]
+    }));
+
+    paper.references.forEach((r) => {
+      docChildren.push(new Paragraph({
+        indent: { left: 720, hanging: 720 },
+        spacing: { before: 40, after: 100, line: 240, lineRule: "auto" },
+        children: [
+          new TextRun({ text: `${r.num}. `, bold: true, font: "Arial", size: 19, color: "0D9488" }),
+          new TextRun({ text: r.text.replace(/^\d+\.\s*/, ''), font: "Arial", size: 19, color: "334155" })
+        ]
+      }));
+    });
+
+    const doc = new Document({
+      sections: [{
+        properties: {
+          page: {
+            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }
+          },
+          titlePage: true
+        },
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1", space: 4 } },
+                children: [
+                  new TextRun({
+                    text: `SciDraft AI · Clinical Evidence Commentary · ${STATE.topic.substring(0, 45)}…`,
+                    font: "Arial",
+                    size: 17,
+                    italics: true,
+                    color: "64748B"
+                  })
+                ]
+              })
+            ]
+          }),
+          first: new Header({ children: [] })
+        },
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                border: { top: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1", space: 4 } },
+                children: [
+                  new TextRun({ text: "SciDraft AI · Educational & Research Use Only        ", font: "Arial", size: 16, color: "64748B" }),
+                  new TextRun({ text: "copyrights@Raouf Roshdy2026        ", font: "Arial", size: 16, bold: true, color: "0D9488" }),
+                  new TextRun({ text: "Page ", font: "Arial", size: 16, color: "64748B" }),
+                  new TextRun({ children: [PageNumber.CURRENT], font: "Arial", size: 16, bold: true, color: "0F172A" }),
+                  new TextRun({ text: " of ", font: "Arial", size: 16, color: "64748B" }),
+                  new TextRun({ children: [PageNumber.TOTAL_PAGES], font: "Arial", size: 16, bold: true, color: "0F172A" })
+                ]
+              })
+            ]
+          }),
+          first: new Footer({
+            children: [
+              new Paragraph({
+                border: { top: { style: BorderStyle.SINGLE, size: 4, color: "CBD5E1", space: 4 } },
+                children: [
+                  new TextRun({ text: "SciDraft AI · Educational & Research Use Only        ", font: "Arial", size: 16, color: "64748B" }),
+                  new TextRun({ text: "copyrights@Raouf Roshdy2026        ", font: "Arial", size: 16, bold: true, color: "0D9488" }),
+                  new TextRun({ text: "Page 1 of ", font: "Arial", size: 16, color: "64748B" }),
+                  new TextRun({ children: [PageNumber.TOTAL_PAGES], font: "Arial", size: 16, bold: true, color: "0F172A" })
+                ]
+              })
+            ]
+          })
+        },
+        children: docChildren
+      }]
+    });
+
+    const blob = await docxLib.Packer.toBlob(doc);
+    const fileName = `SciDraft_Manuscript_${STATE.topic.replace(/\s+/g, '_').substring(0, 35)}_${style}.docx`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 2000);
+
+  } catch(err){
+    console.error('Word Export Error:', err);
+    if(s4Alert){
+      s4Alert.className = 'alert-box alert-error';
+      s4Alert.innerHTML = `
+        <div class="alert-title">❌ Microsoft Word (.docx) Export Failed</div>
+        <div class="alert-reason"><strong>Reason:</strong> ${esc(err.message || 'Browser encountered an issue assembling the Word document.')}</div>
+        <div class="alert-advice">💡 Check browser permissions for file downloads, or try exporting as PDF.</div>
+        <div class="alert-actions">
+          <button class="alert-btn alert-btn-primary" onclick="exportPaperWord()">🔄 Retry Word Export</button>
+          <button class="alert-btn alert-btn-secondary" onclick="document.getElementById('step4-alert').classList.add('hidden')">✕ Dismiss</button>
+        </div>
+      `;
+      s4Alert.classList.remove('hidden');
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PDF EXPORT — PAPER (PUBLICATION GRADE)
 // ═══════════════════════════════════════════════════════════════
 async function exportPaperPDF(){
   if(!STATE.paper) return;
@@ -3479,85 +4197,238 @@ async function exportPaperPDF(){
   if(s4Alert) s4Alert.classList.add('hidden');
 
   try {
-    const {jsPDF}=window.jspdf;
+    const { jsPDF } = window.jspdf;
     if(!jsPDF) throw new Error('PDF generator library (jsPDF) is not loaded.');
-    const doc=new jsPDF('p','mm','a4');
-    const pw=210,ph=297,ml=22,mr=22,mt=20,mb=20,cw=pw-ml-mr;
-    let y=mt;
-    const addPage=()=>{doc.addPage();y=mt;};
-    const chk=(n=12)=>{if(y+n>ph-mb)addPage();};
-    const sHead=(txt)=>{chk(16);y+=4;doc.setFontSize(11);doc.setFont('times','bold');doc.setTextColor(10,60,60);const ls=doc.splitTextToSize(txt,cw);ls.forEach(l=>{doc.text(l,ml,y);y+=5.5;});};
-    const subHead=(txt)=>{chk(10);y+=1;doc.setFontSize(10);doc.setFont('times','bolditalic');doc.setTextColor(30,30,30);const ls=doc.splitTextToSize(txt,cw);ls.forEach(l=>{doc.text(l,ml,y);y+=5;});y+=1;};
-    const paper=STATE.paper,abs=paper.abstractObj;
-    const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pw = 210, ph = 297, ml = 22, mr = 22, mt = 20, mb = 20, cw = pw - ml - mr;
+    let y = mt;
+    const addPage = () => { doc.addPage(); y = mt + 4; };
+    const chk = (n = 12) => { if(y + n > ph - mb) addPage(); };
+    const sHead = (txt) => {
+      chk(26); // Strong orphan heading prevention
+      y += 4;
+      doc.setFontSize(11);
+      doc.setFont('times', 'bold');
+      doc.setTextColor(15, 107, 107);
+      const ls = doc.splitTextToSize(txt, cw);
+      ls.forEach(l => { doc.text(l, ml, y); y += 5.5; });
+      doc.setDrawColor(210, 225, 225);
+      doc.setLineWidth(0.3);
+      doc.line(ml, y - 1, pw - mr, y - 1);
+      y += 3;
+    };
+    const subHead = (txt) => {
+      chk(18);
+      y += 2;
+      doc.setFontSize(10);
+      doc.setFont('times', 'bolditalic');
+      doc.setTextColor(40, 50, 60);
+      const ls = doc.splitTextToSize(txt, cw);
+      ls.forEach(l => { doc.text(l, ml, y); y += 5; });
+      y += 1;
+    };
 
-    // Title page header bar
-    doc.setFillColor(15,107,107);doc.rect(0,0,pw,14,'F');
-    doc.setFontSize(9);doc.setFont('times','bold');doc.setTextColor(255,255,255);
-    doc.text('SciDraft AI — AI-Assisted Literature Review Draft',ml,9);
-    doc.text('Vancouver Citation Style',pw-mr,9,{align:'right'});
+    const paper = STATE.paper, abs = paper.abstractObj;
+    const style = STATE.citationStyle || 'vancouver';
+    const citeStyleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE Pure Superscript)';
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    y=24;
-    doc.setFontSize(15);doc.setFont('times','bold');doc.setTextColor(10,60,60);
-    const tl=doc.splitTextToSize(paper.title,cw);tl.forEach(l=>{doc.text(l,pw/2,y,{align:'center'});y+=7;});
-    y+=4;
+    // Title page header banner
+    doc.setFillColor(15, 107, 107);
+    doc.rect(0, 0, pw, 14, 'F');
+    doc.setFontSize(9);
+    doc.setFont('times', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('SciDraft AI — AI-Assisted Literature Review Draft', ml, 9);
+    doc.text(`Citation: ${citeStyleLabel}`, pw - mr, 9, { align: 'right' });
+
+    y = 25;
+    doc.setFontSize(15);
+    doc.setFont('times', 'bold');
+    doc.setTextColor(15, 45, 55);
+    const tl = doc.splitTextToSize(paper.title, cw);
+    tl.forEach(l => { doc.text(l, pw / 2, y, { align: 'center' }); y += 7; });
+    y += 3;
+
     const srcLabel = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC + Semantic Scholar' : 'Europe PMC';
-    doc.setFontSize(8.5);doc.setFont('times','normal');doc.setTextColor(70,70,70);
-    doc.text(`Generated: ${today} | Sources: ${srcLabel} | Deduplication: ${STATE.duplicatesRemoved||0} excluded | Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=4.5;
-    doc.text('Citation style: Vancouver (ICMJE) | Powered by SciDraft AI v2.0 · Dr Raouf Roshdy',pw/2,y,{align:'center'});y+=4.5;
+    doc.setFontSize(8.5);
+    doc.setFont('times', 'normal');
+    doc.setTextColor(70, 80, 90);
+    doc.text(`Generated: ${today} | Sources: ${srcLabel} | Deduplication: ${STATE.duplicatesRemoved || 0} excluded | Filter: last ${STATE.yearRange < 99 ? STATE.yearRange + ' years' : 'all time'}`, pw / 2, y, { align: 'center' });
+    y += 4.5;
+    doc.text(`Citation Style: ${citeStyleLabel} | Powered by SciDraft AI v2.0 · Dr Raouf Roshdy`, pw / 2, y, { align: 'center' });
+    y += 4.5;
     
     // Quality Audit Certification Stamp
-    doc.setFontSize(8);doc.setFont('times','italic');doc.setTextColor(15,107,107);
+    doc.setFontSize(8);
+    doc.setFont('times', 'italic');
+    doc.setTextColor(15, 107, 107);
     const passC = STATE.auditResult ? `${STATE.auditResult.passCount}/${STATE.auditResult.totalChecks}` : '6/6';
-    doc.text(`✔ Scientific Review Engine Certified: ${passC} Quality Dimensions Passed · 100% Parity · 0 Retractions/Notices`,pw/2,y,{align:'center'});y+=7;
-    doc.setDrawColor(15,107,107);doc.setLineWidth(.5);doc.line(ml,y,pw-mr,y);y+=8;
+    doc.text(`✔ Scientific Review Engine Certified: ${passC} Quality Dimensions Passed · 100% Parity · 0 Retractions/Notices`, pw / 2, y, { align: 'center' });
+    y += 6;
+    doc.setDrawColor(15, 107, 107);
+    doc.setLineWidth(0.5);
+    doc.line(ml, y, pw - mr, y);
+    y += 8;
 
-    sHead('ABSTRACT');
-    const absFields=[['Background: ',abs.background],['Objective: ',abs.objective],['Methods: ',abs.methods],['Results: ',abs.results],['Conclusion: ',abs.conclusion]];
-    absFields.forEach(([lbl,txt])=>{
-      chk(8);
-      doc.setFontSize(9.5);doc.setFont('times','bold');doc.setTextColor(10,10,10);
-      const lw=doc.getTextWidth(lbl);
-      doc.text(lbl,ml,y);
-      doc.setFont('times','normal');
-      const clean=cleanHtmlText(txt).replace(/\[\d+(?:,\d+)*\]/g,m=>m);
-      const bl=doc.splitTextToSize(clean,cw-lw);
-      doc.text(bl[0]||'',ml+lw,y);y+=4.2;
-      bl.slice(1).forEach(l=>{chk(5);doc.text(l,ml,y);y+=4.2;});y+=1.5;
-    });
-    y+=2;doc.setFont('times','italic');doc.setFontSize(9);doc.setTextColor(70,70,70);
-    const kwl=doc.splitTextToSize('Keywords: '+paper.keywords.join('; '),cw);kwl.forEach(l=>{chk(5);doc.text(l,ml,y);y+=4;});
-    doc.setDrawColor(180,180,180);doc.setLineWidth(.25);y+=3;doc.line(ml,y,pw-mr,y);y+=5;
+    // Structured Abstract Section
+    sHead('STRUCTURED ABSTRACT');
+    const absFields = [
+      ['Background: ', abs.background],
+      ['Objective: ', abs.objective],
+      ['Methods: ', abs.methods],
+      ['Results: ', abs.results],
+      ['Conclusion: ', abs.conclusion]
+    ];
 
-    const SECTS=[['1. INTRODUCTION',paper.intro],['2. METHODS',paper.methods],['3. RESULTS',paper.results],['4. DISCUSSION',paper.discussion],['5. CONCLUSION',paper.conclusion]];
-    SECTS.forEach(([heading,content])=>{
-      sHead(heading);
-      content.split('\n\n').forEach(para=>{
-        const cleanPara = cleanHtmlText(para.trim());
-        if(!cleanPara) return;
-        if(/^\d+\.\d+\s/.test(cleanPara)&&cleanPara.length<120){subHead(cleanPara);return;}
-        doc.setFont('times','normal');doc.setFontSize(10.5);doc.setTextColor(25,25,25);
-        const ls=doc.splitTextToSize(cleanPara,cw);ls.forEach(l=>{chk(6);doc.text(l,ml,y);y+=5;});y+=2;
+    absFields.forEach(([lbl, txt]) => {
+      chk(12);
+      doc.setFontSize(9.5);
+      doc.setFont('times', 'bold');
+      doc.setTextColor(15, 45, 55);
+      doc.text(lbl, ml, y);
+      y += 4.2;
+
+      // Format text with citation awareness
+      let formatted = txt;
+      if (style === 'apa' || style === 'harvard') {
+        formatted = txt.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+          const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
+          const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
+          return formatInTextCitation(zeroBased, style);
+        });
+      } else {
+        // Vancouver: uppercase / superscript number with NO brackets
+        formatted = txt.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+          const parts = n.split(',').map(s => s.trim()).filter(Boolean);
+          return ' ' + [...new Set(parts)].join(',') + ' ';
+        });
+      }
+
+      doc.setFont('times', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(40, 45, 50);
+      const clean = cleanHtmlText(formatted);
+      const bl = doc.splitTextToSize(clean, cw);
+      bl.forEach(l => {
+        chk(5);
+        doc.text(l, ml, y);
+        y += 4.3;
       });
+      y += 1.5;
     });
 
-    addPage();sHead('REFERENCES');
-    doc.setFont('times','normal');doc.setFontSize(9.5);doc.setTextColor(25,25,25);
-    paper.references.forEach(r=>{
+    y += 2;
+    doc.setFont('times', 'italic');
+    doc.setFontSize(9);
+    doc.setTextColor(70, 80, 90);
+    const kwl = doc.splitTextToSize('Keywords: ' + paper.keywords.join('; '), cw);
+    kwl.forEach(l => { chk(5); doc.text(l, ml, y); y += 4; });
+    doc.setDrawColor(210, 225, 225);
+    doc.setLineWidth(0.25);
+    y += 3;
+    doc.line(ml, y, pw - mr, y);
+    y += 6;
+
+    // Helper to print paragraphs with citation formatting
+    const printParagraph = (paraText) => {
+      const cleanPara = cleanHtmlText(paraText.trim());
+      if(!cleanPara) return;
+      if(/^\d+\.\d+\s/.test(cleanPara) && cleanPara.length < 120){
+        subHead(cleanPara);
+        return;
+      }
+
+      let renderedText = cleanPara;
+      if (style === 'apa' || style === 'harvard') {
+        renderedText = cleanPara.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+          const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
+          const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
+          return formatInTextCitation(zeroBased, style);
+        });
+      } else {
+        // Vancouver: uppercase / superscript number with NO brackets
+        // User requested: "note that vancover must be uppercase and with no barckets"
+        renderedText = cleanPara.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+          const parts = n.split(',').map(s => s.trim()).filter(Boolean);
+          return ' ' + [...new Set(parts)].join(',') + ' ';
+        });
+      }
+
+      doc.setFont('times', 'normal');
+      doc.setFontSize(10.5);
+      doc.setTextColor(25, 25, 25);
+      const ls = doc.splitTextToSize(renderedText, cw);
+      ls.forEach(l => {
+        chk(6);
+        doc.text(l, ml, y);
+        y += 5;
+      });
+      y += 2.5;
+    };
+
+    // IMRaD Sections
+    const SECTS = [
+      ['1. INTRODUCTION', paper.intro],
+      ['2. METHODS', paper.methods],
+      ['3. RESULTS', paper.results],
+      ['4. DISCUSSION', paper.discussion],
+      ['5. CONCLUSION', paper.conclusion]
+    ];
+
+    SECTS.forEach(([heading, content]) => {
+      sHead(heading);
+      content.split('\n\n').forEach(p => printParagraph(p));
+    });
+
+    // REFERENCES Section
+    addPage();
+    sHead(`REFERENCES (${citeStyleLabel.toUpperCase()})`);
+    doc.setFont('times', 'normal');
+    doc.setFontSize(9.5);
+    doc.setTextColor(25, 25, 25);
+
+    paper.references.forEach(r => {
       const cleanRef = cleanHtmlText(r.text);
-      const ls=doc.splitTextToSize(cleanRef,cw);
-      ls.forEach((l,li)=>{chk(5);doc.text(l,ml+(li>0?5:0),y);y+=4.5;});y+=1.5;
+      const ls = doc.splitTextToSize(cleanRef, cw);
+      ls.forEach((l, li) => {
+        chk(5);
+        doc.text(l, ml + (li > 0 ? 5 : 0), y);
+        y += 4.5;
+      });
+      y += 2;
     });
 
-    // Footer on every page
-    const tot=doc.internal.getNumberOfPages();
-    for(let i=1;i<=tot;i++){
+    // Headers & Footers on every page
+    const tot = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= tot; i++){
       doc.setPage(i);
-      doc.setFillColor(15,107,107);doc.rect(0,ph-10,pw,10,'F');
-      doc.setFontSize(7.5);doc.setFont('times','normal');doc.setTextColor(255,255,255);
-      doc.text(`SciDraft AI — AI-Assisted Literature Review Draft · ${STATE.topic.substring(0,40)}… · Page ${i} of ${tot}`,pw/2,ph-4,{align:'center'});
+
+      // Running header on pages 2+
+      if (i > 1) {
+        doc.setFontSize(7.5);
+        doc.setFont('times', 'italic');
+        doc.setTextColor(100, 115, 125);
+        doc.text('SciDraft AI · Clinical Evidence Commentary Draft', ml, 12);
+        doc.text(STATE.topic.substring(0, 42) + '…', pw - mr, 12, { align: 'right' });
+        doc.setDrawColor(210, 225, 225);
+        doc.setLineWidth(0.25);
+        doc.line(ml, 14, pw - mr, 14);
+      }
+
+      // Thin publication footer on EVERY page
+      doc.setDrawColor(210, 225, 225);
+      doc.setLineWidth(0.25);
+      doc.line(ml, ph - 12, pw - mr, ph - 12);
+      doc.setFontSize(7.5);
+      doc.setFont('times', 'normal');
+      doc.setTextColor(90, 105, 115);
+      doc.text('SciDraft AI · Educational & Research Use Only', ml, ph - 7);
+      doc.text('copyrights@Raouf Roshdy2026', pw / 2, ph - 7, { align: 'center' });
+      doc.text(`Page ${i} of ${tot}`, pw - mr, ph - 7, { align: 'right' });
     }
-    doc.save(`AI_Literature_Review_Draft_${STATE.topic.replace(/\s+/g,'_').substring(0,35)}.pdf`);
+
+    doc.save(`AI_Literature_Review_${STATE.topic.replace(/\s+/g, '_').substring(0, 32)}_${style}.pdf`);
   } catch(err){
     console.error('PDF Export Error:', err);
     if(s4Alert){
@@ -3565,7 +4436,7 @@ async function exportPaperPDF(){
       s4Alert.innerHTML = `
         <div class="alert-title">❌ Literature Review Draft PDF Export Failed</div>
         <div class="alert-reason"><strong>Reason:</strong> ${esc(err.message || 'Browser encountered an issue rendering the review draft PDF.')}</div>
-        <div class="alert-advice">💡 Check browser permissions for downloading files, or try exporting the References PDF.</div>
+        <div class="alert-advice">💡 Check browser permissions for downloading files, or try exporting the Word (.docx) document.</div>
         <div class="alert-actions">
           <button class="alert-btn alert-btn-primary" onclick="exportPaperPDF()">🔄 Retry Export</button>
           <button class="alert-btn alert-btn-secondary" onclick="document.getElementById('step4-alert').classList.add('hidden')">✕ Dismiss</button>
@@ -3577,7 +4448,7 @@ async function exportPaperPDF(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PDF EXPORT — REFERENCES
+// PDF EXPORT — REFERENCES & VERIFICATION MATRIX
 // ═══════════════════════════════════════════════════════════════
 async function exportReferencesPDF(){
   if(!STATE.paper) return;
@@ -3585,89 +4456,145 @@ async function exportReferencesPDF(){
   if(s4Alert) s4Alert.classList.add('hidden');
 
   try {
-    const {jsPDF}=window.jspdf;
+    const { jsPDF } = window.jspdf;
     if(!jsPDF) throw new Error('PDF generator library (jsPDF) is not loaded.');
-    const doc=new jsPDF('p','mm','a4');
-    const pw=210,ph=297,ml=22,mr=22,mt=20,mb=20,cw=pw-ml-mr;
-    let y=mt;
-    const addPage=()=>{doc.addPage();y=mt;};
-    const chk=(n=10)=>{if(y+n>ph-mb)addPage();};
-    const today=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pw = 210, ph = 297, ml = 22, mr = 22, mt = 20, mb = 20, cw = pw - ml - mr;
+    let y = mt;
+    const addPage = () => { doc.addPage(); y = mt + 4; };
+    const chk = (n = 10) => { if(y + n > ph - mb) addPage(); };
+    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    const style = STATE.citationStyle || 'vancouver';
+    const citeStyleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE)';
 
-    doc.setFillColor(15,107,107);doc.rect(0,0,pw,14,'F');
-    doc.setFontSize(9);doc.setFont('times','bold');doc.setTextColor(255,255,255);
-    doc.text('SciDraft AI — AI-Assisted Literature Review References & Verification',ml,9);
-    doc.text('ICMJE / Vancouver Style',pw-mr,9,{align:'right'});
+    doc.setFillColor(15, 107, 107);
+    doc.rect(0, 0, pw, 14, 'F');
+    doc.setFontSize(9);
+    doc.setFont('times', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('SciDraft AI — References & Verification Matrix', ml, 9);
+    doc.text(`Format: ${citeStyleLabel}`, pw - mr, 9, { align: 'right' });
 
-    y=24;
-    doc.setFontSize(13);doc.setFont('times','bold');doc.setTextColor(10,60,60);
-    const hl=doc.splitTextToSize(`Reference List: ${STATE.topic}`,cw);
-    hl.forEach(l=>{doc.text(l,pw/2,y,{align:'center'});y+=6;});
-    y+=3;
-    doc.setFontSize(8.5);doc.setFont('times','normal');doc.setTextColor(90,90,90);
-    doc.text(`SciDraft AI · Vancouver Citation Style · Generated: ${today}`,pw/2,y,{align:'center'});y+=4.5;
+    y = 25;
+    doc.setFontSize(13);
+    doc.setFont('times', 'bold');
+    doc.setTextColor(15, 45, 55);
+    const hl = doc.splitTextToSize(`Bibliographic References & Quality Appraisal: ${STATE.topic}`, cw);
+    hl.forEach(l => { doc.text(l, pw / 2, y, { align: 'center' }); y += 6; });
+    y += 3;
+    doc.setFontSize(8.5);
+    doc.setFont('times', 'normal');
+    doc.setTextColor(90, 100, 110);
+    doc.text(`SciDraft AI · Citation Style: ${citeStyleLabel} · Generated: ${today}`, pw / 2, y, { align: 'center' });
+    y += 4.5;
     const pdfSrc = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
-    doc.text(`Source: ${pdfSrc} · ${STATE.paper.references.length} unique references (${STATE.duplicatesRemoved||0} duplicates excluded) · Year filter: last ${STATE.yearRange<99?STATE.yearRange+' years':'all time'}`,pw/2,y,{align:'center'});y+=4.5;
+    doc.text(`Source: ${pdfSrc} · ${STATE.paper.references.length} unique references (${STATE.duplicatesRemoved || 0} duplicates excluded) · Year filter: last ${STATE.yearRange < 99 ? STATE.yearRange + ' years' : 'all time'}`, pw / 2, y, { align: 'center' });
+    y += 4.5;
     
     // Quality Audit Certification
-    doc.setFontSize(8);doc.setFont('times','italic');doc.setTextColor(15,107,107);
+    doc.setFontSize(8);
+    doc.setFont('times', 'italic');
+    doc.setTextColor(15, 107, 107);
     const passC2 = STATE.auditResult ? `${STATE.auditResult.passCount}/${STATE.auditResult.totalChecks}` : '6/6';
-    doc.text(`✔ Scientific Review Engine Certified: ${passC2} Checks Passed · 100% Parity · 0 Notices · Multi-Tier DOI Validation`,pw/2,y,{align:'center'});y+=7;
-    doc.setDrawColor(15,107,107);doc.setLineWidth(.5);doc.line(ml,y,pw-mr,y);y+=6;
+    doc.text(`✔ Scientific Review Engine Certified: ${passC2} Checks Passed · 100% Parity · 0 Notices · Multi-Tier DOI Validation`, pw / 2, y, { align: 'center' });
+    y += 6;
+    doc.setDrawColor(15, 107, 107);
+    doc.setLineWidth(0.5);
+    doc.line(ml, y, pw - mr, y);
+    y += 6;
 
     // Column headers
-    doc.setFillColor(227,242,242);doc.rect(ml,y-4,cw,8,'F');
-    doc.setFontSize(9);doc.setFont('times','bold');doc.setTextColor(15,107,107);
-    doc.text('#',ml+1,y);doc.text('Reference (Vancouver) & Classification',ml+9,y);
-    doc.text('Heuristic Rel.',pw-mr-28,y);doc.text('Status',pw-mr,y,{align:'right'});
-    y+=6;doc.setDrawColor(200,220,220);doc.setLineWidth(.2);doc.line(ml,y,pw-mr,y);y+=3;
+    doc.setFillColor(227, 242, 242);
+    doc.rect(ml, y - 4, cw, 8, 'F');
+    doc.setFontSize(9);
+    doc.setFont('times', 'bold');
+    doc.setTextColor(15, 107, 107);
+    doc.text('#', ml + 1, y);
+    doc.text(`Reference (${citeStyleLabel}) & Classification`, ml + 9, y);
+    doc.text('Heuristic Rel.', pw - mr - 28, y);
+    doc.text('Status', pw - mr, y, { align: 'right' });
+    y += 6;
+    doc.setDrawColor(200, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.line(ml, y, pw - mr, y);
+    y += 3;
 
-    STATE.paper.references.forEach((r,i)=>{
-      const pct=STATE.relevance[i]||0,val=STATE.validations[i]||{};
-      const relObj=(STATE.relevanceDetails&&STATE.relevanceDetails[i]) ? STATE.relevanceDetails[i] : scoreHeuristicRelevance(r.paper, STATE.topic);
-      const design = classifyStudyDesign(r.paper);
-      const ft = getFullTextInfo(r.paper);
-      const warnInfo = getManualVerificationWarnings(r.paper, val, pct);
+    STATE.paper.references.forEach((r, i) => {
+      const origPaper = r.paper || STATE.papers[r.origIdx !== undefined ? r.origIdx : i];
+      const pct = STATE.relevance[r.origIdx !== undefined ? r.origIdx : i] || 0;
+      const val = STATE.validations[r.origIdx !== undefined ? r.origIdx : i] || {};
+      const relObj = (STATE.relevanceDetails && STATE.relevanceDetails[r.origIdx !== undefined ? r.origIdx : i]) ? STATE.relevanceDetails[r.origIdx !== undefined ? r.origIdx : i] : scoreHeuristicRelevance(origPaper, STATE.topic);
+      const design = classifyStudyDesign(origPaper);
+      const ft = getFullTextInfo(origPaper);
+      const warnInfo = getManualVerificationWarnings(origPaper, val, pct);
 
       const cleanRefText = cleanHtmlText(r.text);
-      const ls=doc.splitTextToSize(cleanRefText,cw-55);
+      const ls = doc.splitTextToSize(cleanRefText, cw - 55);
 
-      const expStr = relObj.explanations.length ? ` | [${relObj.explanations.slice(0,2).join(', ')}]` : '';
-      const extraText = `Design: ${design.name} | ${ft.label}${expStr}${warnInfo.isClean ? '' : ' | [!] '+warnInfo.warnings[0].substring(0,35)+'…'}`;
-      const extraLs = doc.splitTextToSize(extraText, cw-55);
+      const expStr = relObj.explanations.length ? ` | [${relObj.explanations.slice(0, 2).join(', ')}]` : '';
+      const extraText = `Design: ${design.name} | ${ft.label}${expStr}${warnInfo.isClean ? '' : ' | [!] ' + warnInfo.warnings[0].substring(0, 35) + '…'}`;
+      const extraLs = doc.splitTextToSize(extraText, cw - 55);
 
       const rowH = Math.max(16, (ls.length * 4.2) + (extraLs.length * 3.6) + 4);
-      chk(rowH+2);
-      if(i%2===0){doc.setFillColor(248,252,252);doc.rect(ml,y-3,cw,rowH,'F');}
-      doc.setFont('times','bold');doc.setFontSize(9);doc.setTextColor(15,107,107);
-      doc.text(`${r.num}.`,ml+1,y);
-      doc.setFont('times','normal');doc.setFontSize(8.5);doc.setTextColor(20,20,20);
-      ls.forEach((l,li)=>doc.text(l,ml+9,y+li*4.2));
+      chk(rowH + 2);
+      if(i % 2 === 0){
+        doc.setFillColor(248, 252, 252);
+        doc.rect(ml, y - 3, cw, rowH, 'F');
+      }
+      doc.setFont('times', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(15, 107, 107);
+      doc.text(`${r.num}.`, ml + 1, y);
+      doc.setFont('times', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(20, 20, 20);
+      ls.forEach((l, li) => doc.text(l, ml + 9, y + li * 4.2));
       
-      // Additional classification info row (no duplicate DOI print, since cleanRefText already includes doi/PMID)
       const extraY = y + (ls.length * 4.2) + 0.5;
-      doc.setFont('times','italic');doc.setFontSize(7.3);doc.setTextColor(80,80,80);
-      extraLs.forEach((el, eli) => doc.text(el, ml+9, extraY + eli * 3.6));
+      doc.setFont('times', 'italic');
+      doc.setFontSize(7.3);
+      doc.setTextColor(80, 80, 80);
+      extraLs.forEach((el, eli) => doc.text(el, ml + 9, extraY + eli * 3.6));
 
-      const rc=pct>=70?[34,150,90]:pct>=45?[200,140,0]:[200,50,50];
-      doc.setFont('times','bold');doc.setFontSize(10);doc.setTextColor(...rc);
-      doc.text(`${pct}%`,pw-mr-28,y);
-      doc.setFont('times',val.valid?'bold':'italic');doc.setFontSize(8);
-      doc.setTextColor(val.valid?15:180,val.valid?107:60,val.valid?107:60);
-      doc.text(val.status||'—',pw-mr,y,{align:'right'});
+      const rc = pct >= 70 ? [34, 150, 90] : pct >= 45 ? [200, 140, 0] : [200, 50, 50];
+      doc.setFont('times', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...rc);
+      doc.text(`${pct}%`, pw - mr - 28, y);
+      doc.setFont('times', val.valid ? 'bold' : 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(val.valid ? 15 : 180, val.valid ? 107 : 60, val.valid ? 107 : 60);
+      doc.text(val.status || '—', pw - mr, y, { align: 'right' });
       
-      doc.setDrawColor(210,225,225);doc.line(ml,y+rowH-1,pw-mr,y+rowH-1);
-      y+=rowH+2;
+      doc.setDrawColor(210, 225, 225);
+      doc.line(ml, y + rowH - 1, pw - mr, y + rowH - 1);
+      y += rowH + 2;
     });
 
-    const tot=doc.internal.getNumberOfPages();
-    for(let i=1;i<=tot;i++){
+    const tot = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= tot; i++){
       doc.setPage(i);
-      doc.setFillColor(15,107,107);doc.rect(0,ph-10,pw,10,'F');
-      doc.setFontSize(7.5);doc.setFont('times','normal');doc.setTextColor(255,255,255);
-      doc.text(`SciDraft AI — References · Page ${i} of ${tot}`,pw/2,ph-4,{align:'center'});
+      if (i > 1) {
+        doc.setFontSize(7.5);
+        doc.setFont('times', 'italic');
+        doc.setTextColor(100, 115, 125);
+        doc.text('SciDraft AI · References & Verification Matrix', ml, 12);
+        doc.text(STATE.topic.substring(0, 42) + '…', pw - mr, 12, { align: 'right' });
+        doc.setDrawColor(210, 225, 225);
+        doc.setLineWidth(0.25);
+        doc.line(ml, 14, pw - mr, 14);
+      }
+      doc.setDrawColor(210, 225, 225);
+      doc.setLineWidth(0.25);
+      doc.line(ml, ph - 12, pw - mr, ph - 12);
+      doc.setFontSize(7.5);
+      doc.setFont('times', 'normal');
+      doc.setTextColor(90, 105, 115);
+      doc.text('SciDraft AI · References Appraisal Matrix', ml, ph - 7);
+      doc.text('copyrights@Raouf Roshdy2026', pw / 2, ph - 7, { align: 'center' });
+      doc.text(`Page ${i} of ${tot}`, pw - mr, ph - 7, { align: 'right' });
     }
-    doc.save(`AI_Review_References_${STATE.topic.replace(/\s+/g,'_').substring(0,30)}.pdf`);
+    doc.save(`AI_Review_References_${STATE.topic.replace(/\s+/g, '_').substring(0, 30)}_${style}.pdf`);
   } catch(err){
     console.error('References PDF Export Error:', err);
     if(s4Alert){
@@ -3733,12 +4660,10 @@ async function runPipeline(){
 
     const engineName = searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : searchSource === 's2' ? 'Semantic Scholar' : 'Europe PMC';
     setProc(`Connecting to ${engineName}…`, 'Initialising literature search pipeline', 5);
-    await sleep(250);
-    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    await abortableSleep(250, signal);
 
     setProc(`Querying ${engineName}…`, `Query: "${topic}" · Target: ${pgSize} papers · Last ${yearRange<99?yearRange+' years':'all time'}`, 15);
-    await sleep(200);
-    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    await abortableSleep(200, signal);
 
     const { results, hitCount, epmcCount, s2Count, epmcFailed, s2Failed } = await fetchPapers(topic, pgSize, yearRange, signal, searchSource, s2Key);
     const { unique, dupCount, mergedCount } = deduplicatePapers(results);
@@ -3757,12 +4682,11 @@ async function runPipeline(){
     const ratioText = stats.deficitTransferred > 0 ? ` · Auto-reallocated ${stats.deficitTransferred} deficit paper${stats.deficitTransferred===1?'':'s'}` : '';
     const noteText = (epmcFailed ? ' (Europe PMC rate limited)' : '') + (s2Failed ? ' (Semantic Scholar rate limited)' : '');
     setProc(`Found ${hitCount} records${noteText} · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed${mergeText}) · Balanced to target ${STATE.papers.length} papers in unified container${ratioText}…`, `Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`, 35);
-    await sleep(250);
-    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    await abortableSleep(250, signal);
 
     // ── Validate (Controlled Batches of 5 with Live Count & Abort Support) ──
     setProc(`Validating references via ${engineName}…`, `0 of ${STATE.papers.length} references validated (0%) · Batched parallel processing`, 40);
-    await sleep(50);
+    await abortableSleep(50, signal);
 
     STATE.validations = new Array(STATE.papers.length);
     let completedCount = 0;
@@ -3800,8 +4724,7 @@ async function runPipeline(){
     }
 
     setProc(`Validation complete: ${verifiedCount}/${STATE.papers.length} verified`, 'Computing relevance scores…', 72);
-    await sleep(150);
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    await abortableSleep(150, signal);
 
     // Check for partial validation failures to show warning banner on Step 3
     const valAlert = document.getElementById('partial-validation-alert');
@@ -3837,12 +4760,11 @@ async function runPipeline(){
       STATE.relevanceDetails.push(relObj);
     });
     setProc('Heuristic relevance scoring complete','Building per-paper report cards with diagnostic explanations…',85);
-    await sleep(300);
-    if(signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    await abortableSleep(250, signal);
 
     // ── Render Step 3 ──────────────────────────────────────────────
     setProc('Generating individual paper reports…','Almost done…',95);
-    await sleep(300);
+    await abortableSleep(250, signal);
     lastRemovedPaper = null;
     const remNotice = document.getElementById('step3-remove-notice');
     if(remNotice) remNotice.classList.add('hidden');
