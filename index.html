@@ -1122,7 +1122,7 @@ function selectSearchEngine(el, mode){
 }
 
 function getSourceBadgeHTML(paper){
-  if(paper.source === 'both' || (paper.sources && paper.sources.length > 1)){
+  if(paper.badge === 'cross-verified' || paper.source === 'both' || (paper.sources && paper.sources.length > 1)){
     return `<span class="source-badge source-both" title="Retrieved and cross-verified in both Europe PMC and Semantic Scholar">🌐 Europe PMC + Semantic Scholar</span>`;
   }
   if(paper.source === 's2' || (paper.sources && paper.sources.includes('Semantic Scholar'))){
@@ -1800,8 +1800,83 @@ async function fetchPapers(topic, pageSize, yearRange, signal, sourceMode = 'bot
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DUPLICATE REMOVAL & CROSS-ENGINE RECORD MERGING
+// CANONICAL DOI NORMALIZATION, TITLE FINGERPRINTING & DEDUPLICATION
 // ═══════════════════════════════════════════════════════════════
+
+const GREEK_LETTER_MAP = {
+  'α': 'alpha', 'Α': 'alpha',
+  'β': 'beta', 'Β': 'beta',
+  'γ': 'gamma', 'Γ': 'gamma',
+  'δ': 'delta', 'Δ': 'delta',
+  'ε': 'epsilon', 'Ε': 'epsilon',
+  'ζ': 'zeta', 'Ζ': 'zeta',
+  'η': 'eta', 'Η': 'eta',
+  'θ': 'theta', 'Θ': 'theta',
+  'ι': 'iota', 'Ι': 'iota',
+  'κ': 'kappa', 'Κ': 'kappa',
+  'λ': 'lambda', 'Λ': 'lambda',
+  'μ': 'mu', 'Μ': 'mu',
+  'ν': 'nu', 'Ν': 'nu',
+  'ξ': 'xi', 'Ξ': 'xi',
+  'ο': 'omicron', 'Ο': 'omicron',
+  'π': 'pi', 'Π': 'pi',
+  'ρ': 'rho', 'Ρ': 'rho',
+  'σ': 'sigma', 'ς': 'sigma', 'Σ': 'sigma',
+  'τ': 'tau', 'Τ': 'tau',
+  'υ': 'upsilon', 'Υ': 'upsilon',
+  'φ': 'phi', 'ϕ': 'phi', 'Φ': 'phi',
+  'χ': 'chi', 'Χ': 'chi',
+  'ψ': 'psi', 'Ψ': 'psi',
+  'ω': 'omega', 'Ω': 'omega'
+};
+
+function normalizeDoi(doi){
+  if(!doi || typeof doi !== 'string') return '';
+  let d = doi.trim().toLowerCase();
+  // Strip leading prefixes: "https://doi.org/", "http://dx.doi.org/", "http://doi.org/", "https://dx.doi.org/", "doi:"
+  d = d.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '');
+  d = d.replace(/^doi:?\s*\/?/i, '');
+  return d.trim();
+}
+
+function decodeHtmlEntities(str){
+  if(!str) return '';
+  return str
+    .replace(/&amp;/gi, ' and ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&/g, ' and ');
+}
+
+function canonicalTitleFingerprint(title){
+  if(!title || typeof title !== 'string') return '';
+  // 1. Decode HTML entities first (handles &lt;i&gt;, &amp;, etc.)
+  let s = decodeHtmlEntities(title);
+  // 2. Strip XML/HTML tags (both raw and decoded)
+  s = s.replace(/<\/?[a-z0-9]+(?:\s+[^>]*)?>/gi, ' ');
+  // 3. Named Greek entity aliases
+  s = s.replace(/&(alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|micro|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega);/gi, (_, g) => {
+    return g.toLowerCase() === 'micro' ? 'mu' : g.toLowerCase();
+  });
+  // 4. Replace Greek letters with English names
+  for(const [char, name] of Object.entries(GREEK_LETTER_MAP)){
+    if(s.includes(char)){
+      s = s.split(char).join(name);
+    }
+  }
+  // 5. Remove all non-alphanumeric characters except spaces, collapse multiple spaces to one, and lowercase
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function deduplicatePapers(rawPapers){
   const seen = new Map();
   let dupCount = 0;
@@ -1810,23 +1885,31 @@ function deduplicatePapers(rawPapers){
   for(const p of rawPapers){
     if(isEditorialNotice(p)) continue;
     const keys = [];
-    if(p.pmid && String(p.pmid).trim()) {
-      keys.push('pmid:' + String(p.pmid).trim());
+
+    // 1. Canonical DOI Normalization
+    const normDoi = normalizeDoi(p.doi);
+    if(normDoi){
+      keys.push('doi:' + normDoi);
+      p.doi = normDoi;
     }
-    if(p.doi && String(p.doi).trim()) {
-      const cleanDoi = String(p.doi).toLowerCase().trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '');
-      if(cleanDoi) keys.push('doi:' + cleanDoi);
+
+    // 2. PMID Normalization
+    const normPmid = (p.pmid && String(p.pmid).trim()) ? String(p.pmid).trim() : '';
+    if(normPmid){
+      keys.push('pmid:' + normPmid);
+      p.pmid = normPmid;
     }
-    const cleanTitle = (p.title || '')
-      .toLowerCase()
-      .replace(/<[^>]+>/g, '')
-      .replace(/&(?:amp|quot|lt|gt|#\d+);/g, ' ')
-      .replace(/[^a-z0-9]/g, '');
-    if(cleanTitle.length > 10) {
-      keys.push('title:' + cleanTitle);
+
+    // 3. Canonical Title Fingerprinting
+    const fpTitle = canonicalTitleFingerprint(p.title);
+    if(fpTitle.length > 10){
+      keys.push('title:' + fpTitle);
     }
-    if(p.s2PaperId && String(p.s2PaperId).trim()) {
-      keys.push('s2:' + String(p.s2PaperId).trim());
+
+    // 4. S2 Paper ID Key
+    const s2Id = (p.s2PaperId && String(p.s2PaperId).trim()) ? String(p.s2PaperId).trim() : '';
+    if(s2Id){
+      keys.push('s2:' + s2Id);
     }
 
     let existing = null;
@@ -1839,28 +1922,46 @@ function deduplicatePapers(rawPapers){
 
     if(existing){
       dupCount++;
-      // Merge cross-engine records into a unified representation
-      if(existing.source !== p.source || p.source === 'both'){
+      const isCrossEngine = (existing.source !== p.source) || p.source === 'both' || existing.source === 'both';
+      if(isCrossEngine){
         existing.source = 'both';
+        existing.badge = 'cross-verified';
         const srcs = new Set([...(existing.sources || [existing.source]), ...(p.sources || [p.source])]);
         existing.sources = [...srcs].map(s => s === 'epmc' ? 'Europe PMC' : s === 's2' ? 'Semantic Scholar' : s);
         mergedCount++;
       }
-      if((!existing.abstract || existing.abstract.length < 50) && p.abstract){
-        existing.abstract = p.abstract;
-      } else if(p.abstract && p.abstract.length > (existing.abstract || '').length){
-        existing.abstract = p.abstract;
+
+      // Requirement 3: Preserve the longest abstract available
+      const existingAbs = existing.abstract || '';
+      const incomingAbs = p.abstract || '';
+      if(incomingAbs.length > existingAbs.length){
+        existing.abstract = incomingAbs;
       }
-      if(!existing.doi && p.doi) existing.doi = p.doi;
-      if(!existing.pmid && p.pmid) existing.pmid = p.pmid;
-      if(!existing.pmcid && p.pmcid) existing.pmcid = p.pmcid;
+
+      // Requirement 3: Retain both PMID and DOI identifiers
+      if(!existing.doi && normDoi) existing.doi = normDoi;
+      if(!existing.pmid && normPmid) existing.pmid = normPmid;
+      if(!existing.pmcid && p.pmcid) existing.pmcid = String(p.pmcid).trim();
       if(!existing.s2PaperId && p.s2PaperId) existing.s2PaperId = p.s2PaperId;
       if(!existing.s2Url && p.s2Url) existing.s2Url = p.s2Url;
-      if(!existing.openAccessPdfUrl && p.openAccessPdfUrl) existing.openAccessPdfUrl = p.openAccessPdfUrl;
-      existing.isOpenAccess = existing.isOpenAccess || p.isOpenAccess;
-      existing.hasPDF = existing.hasPDF || p.hasPDF;
+
+      // Requirement 3: Retain open access PDF links from PMC when available, falling back to S2 open access links
+      const pmcId = existing.pmcid || p.pmcid;
+      const pmcPdfUrl = pmcId ? `https://europepmc.org/backend/ptpmcrender.fcgi?accid=${pmcId}&blobtype=pdf` : (existing.source === 'epmc' && existing.openAccessPdfUrl ? existing.openAccessPdfUrl : (p.source === 'epmc' && p.openAccessPdfUrl ? p.openAccessPdfUrl : ''));
+      const s2PdfUrl = (p.source === 's2' && p.openAccessPdfUrl) ? p.openAccessPdfUrl : (existing.source === 's2' && existing.openAccessPdfUrl ? existing.openAccessPdfUrl : (existing.openAccessPdfUrl || p.openAccessPdfUrl || ''));
+
+      existing.openAccessPdfUrl = pmcPdfUrl || s2PdfUrl || '';
+      existing.isOpenAccess = Boolean(existing.isOpenAccess || p.isOpenAccess || pmcId || existing.openAccessPdfUrl);
+      existing.hasPDF = Boolean(existing.hasPDF || p.hasPDF || Boolean(existing.openAccessPdfUrl));
+
+      // Additional Metadata Resolution
       existing.citedBy = Math.max(existing.citedBy || 0, p.citedBy || 0);
       if((!existing.journal || existing.journal.length < 3) && p.journal) existing.journal = p.journal;
+      if(!existing.volume && p.volume) existing.volume = p.volume;
+      if(!existing.issue && p.issue) existing.issue = p.issue;
+      if(!existing.pages && p.pages) existing.pages = p.pages;
+      if((!existing.authors || existing.authors === 'Unknown Authors') && p.authors && p.authors !== 'Unknown Authors') existing.authors = p.authors;
+
       if(Array.isArray(p.meshTerms) && p.meshTerms.length){
         existing.meshTerms = [...new Set([...(existing.meshTerms || []), ...p.meshTerms])];
       }
@@ -1868,10 +1969,16 @@ function deduplicatePapers(rawPapers){
         existing.keywords = [...new Set([...(existing.keywords || []), ...p.keywords])];
       }
 
-      // Re-index all keys to the merged instance
+      // Re-index all keys to the canonical merged entity
       keys.forEach(k => seen.set(k, existing));
+      if(existing.doi) seen.set('doi:' + normalizeDoi(existing.doi), existing);
+      if(existing.pmid) seen.set('pmid:' + String(existing.pmid).trim(), existing);
+      const exFp = canonicalTitleFingerprint(existing.title);
+      if(exFp.length > 10) seen.set('title:' + exFp, existing);
     } else {
-      p.sources = p.sources || [p.source === 'epmc' ? 'Europe PMC' : 'Semantic Scholar'];
+      p.doi = normDoi;
+      p.pmid = normPmid;
+      p.sources = p.sources || [p.source === 'epmc' ? 'Europe PMC' : p.source === 's2' ? 'Semantic Scholar' : 'Europe PMC'];
       keys.forEach(k => seen.set(k, p));
     }
   }
