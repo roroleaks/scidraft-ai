@@ -3824,15 +3824,18 @@ function repositionVancouverCitations(text) {
   s = s.replace(/([.,;:])\s+(<sup\b[^>]*>[\d,]+<\/sup>)/gi, '$1$2');
   s = s.replace(/([.,;:])(<sup\b[^>]*>[\d,]+<\/sup>)\s*\1/gi, '$1$2');
 
-  // 6. Raw numbers before trailing punctuation:
-  // e.g. 'as reported in previous trials 1,2.' -> 'as reported in previous trials.1,2'
-  s = s.replace(/([a-zA-ZÀ-ÿ\)])\s+(\d+(?:,\d+)*)\s*([.,;:])/g, '$1$3$2');
-
-  // 7. Raw numbers with space after punctuation:
-  // e.g. 'as reported in previous trials. 1,2' -> 'as reported in previous trials.1,2'
-  s = s.replace(/([.,;:])\s+(\d+(?:,\d+)*)(\s+[A-Z]|\s*$)/g, '$1$2$3');
-
   return s;
+}
+
+const UNICODE_SUPERSCRIPT_MAP = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+  ',': ',', '-': '⁻'
+};
+
+function toUnicodeSuperscript(numStr) {
+  if (!numStr) return '';
+  return String(numStr).split('').map(ch => UNICODE_SUPERSCRIPT_MAP[ch] || ch).join('');
 }
 
 function parseParagraphTokens(paraText, citationStyle = STATE.citationStyle || 'vancouver', papers = STATE.papers) {
@@ -4574,7 +4577,7 @@ function renderPaperPreview(paper){
     ${sectionHTML('4', 'Discussion', paper.discussion)}
     ${sectionHTML('5', 'Conclusion', paper.conclusion)}
     <div class="s-head">References (${esc(citeStyleLabel)})</div>
-    ${paper.references.map(r => `<p class="ref-e" id="ref-anchor-${r.num}"><strong>${r.num}.</strong> ${r.html ? r.html.replace(/^\d+\.\s*/, '') : esc(r.text.replace(/^\d+\.\s*/, ''))}</p>`).join('')}
+    ${paper.references.map(r => `<p class="ref-e" id="ref-anchor-${r.origIdx !== undefined ? (r.origIdx + 1) : r.num}" data-ref-num="${r.num}"><strong>${r.num}.</strong> ${r.html ? r.html.replace(/^\d+\.\s*/, '') : esc(r.text.replace(/^\d+\.\s*/, ''))}</p>`).join('')}
   `;
 }
 
@@ -4587,7 +4590,7 @@ function renderReferencesTab(paper){
       const orig = r.paper || STATE.papers[r.origIdx !== undefined ? r.origIdx : idx];
       const srcBadge = orig ? getSourceBadgeHTML(orig) : '';
       const refContent = r.html ? r.html.replace(/^\d+\.\s*/, '') : esc(r.text);
-      return `<li style="margin-bottom:12px;line-height:1.5" id="ref-tab-${r.num}">
+      return `<li style="margin-bottom:12px;line-height:1.5" id="ref-tab-${r.origIdx !== undefined ? (r.origIdx + 1) : r.num}" data-ref-num="${r.num}">
         <div style="margin-bottom:4px;display:flex;align-items:center;gap:6px">${srcBadge}</div>
         <div><strong>${r.num}.</strong> ${refContent}</div>
       </li>`;
@@ -5363,9 +5366,10 @@ async function exportPaperPDF(){
           return formatInTextCitation(zeroBased, style);
         });
       } else {
-        formatted = txt.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+        formatted = repositionVancouverCitations(txt).replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
           const parts = n.split(',').map(s => s.trim()).filter(Boolean);
-          return ' ' + [...new Set(parts)].join(',') + ' ';
+          const cleanNums = [...new Set(parts)].join(',');
+          return toUnicodeSuperscript(cleanNums);
         });
       }
 
@@ -5415,9 +5419,10 @@ async function exportPaperPDF(){
           return formatInTextCitation(zeroBased, style);
         });
       } else {
-        renderedText = cleanPara.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+        renderedText = repositionVancouverCitations(cleanPara).replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
           const parts = n.split(',').map(s => s.trim()).filter(Boolean);
-          return ' ' + [...new Set(parts)].join(',') + ' ';
+          const cleanNums = [...new Set(parts)].join(',');
+          return toUnicodeSuperscript(cleanNums);
         });
       }
 
@@ -5713,6 +5718,17 @@ async function exportReferencesPDF(){
       doc.setFontSize(8);
       doc.setTextColor(25, 25, 25);
       lines2.forEach((l, idx) => doc.text(l, colX[1] + padX, y + padY + 8 + (idx * lh8)));
+
+      // Clickable DOI/PMID link annotation over Column 2 reference cell
+      const resolverUrl = origPaper?.doi
+        ? (origPaper.doi.startsWith('http') ? origPaper.doi : `https://doi.org/${origPaper.doi.replace(/^doi:\s*/i, '')}`)
+        : origPaper?.pmid
+        ? `https://pubmed.ncbi.nlm.nih.gov/${origPaper.pmid}/`
+        : null;
+
+      if (resolverUrl && typeof doc.link === 'function') {
+        doc.link(colX[1], y, colWidths[1], rowH, { url: resolverUrl });
+      }
 
       // Draw Col 3 text
       doc.setFont('times', 'normal');

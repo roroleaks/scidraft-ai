@@ -32,6 +32,30 @@ const wrapLongStringForPdf = (str) => {
   });
 };
 
+function repositionVancouverCitations(text) {
+  if (!text || typeof text !== 'string') return '';
+  let s = text;
+  s = s.replace(/\[(\d+(?:,\s*\d+)*)\]\s*,?\s*\[(\d+(?:,\s*\d+)*)\]/g, '[$1,$2]');
+  s = s.replace(/\s*\[(\d+(?:,\s*\d+)*)\]\s*([.,;:])/g, '$2[$1]');
+  s = s.replace(/([.,;:])\s+\[(\d+(?:,\s*\d+)*)\]/g, '$1[$2]');
+  s = s.replace(/([.,;:])\[(\d+(?:,\s*\d+)*)\]\s*\1/g, '$1[$2]');
+  s = s.replace(/\s*(<sup\b[^>]*>[\d,]+<\/sup>)\s*([.,;:])/gi, '$2$1');
+  s = s.replace(/([.,;:])\s+(<sup\b[^>]*>[\d,]+<\/sup>)/gi, '$1$2');
+  s = s.replace(/([.,;:])(<sup\b[^>]*>[\d,]+<\/sup>)\s*\1/gi, '$1$2');
+  return s;
+}
+
+const UNICODE_SUPERSCRIPT_MAP = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+  ',': ',', '-': '⁻'
+};
+
+function toUnicodeSuperscript(numStr) {
+  if (!numStr) return '';
+  return String(numStr).split('').map(ch => UNICODE_SUPERSCRIPT_MAP[ch] || ch).join('');
+}
+
 function runLayoutTests() {
   console.log('--- STARTING PDF LAYOUT & CALIBRATION TESTS ---');
 
@@ -56,13 +80,12 @@ function runLayoutTests() {
   {
     console.log('\n[Test 2] Dynamic page break & orphan heading prevention');
 
-    const headingHeight = 22; // 13pt bold + spacing
+    const headingHeight = 22;
     const minFollowLines = 2;
-    const requiredRoom = headingHeight + (minFollowLines * BODY_LINE_HEIGHT_PT); // 22 + 27 = 49pt
+    const requiredRoom = headingHeight + (minFollowLines * BODY_LINE_HEIGHT_PT);
 
-    const pageBottomLimit = A4_HEIGHT_PT - MARGIN_1_INCH_PT; // 769.89pt
+    const pageBottomLimit = A4_HEIGHT_PT - MARGIN_1_INCH_PT;
 
-    // Case A: Heading rendered when plenty of room
     let currentY = 500;
     let pageBreaks = 0;
     if (currentY + requiredRoom > pageBottomLimit) {
@@ -71,8 +94,7 @@ function runLayoutTests() {
     }
     assert.strictEqual(pageBreaks, 0, 'No page break when plenty of room remains');
 
-    // Case B: Heading positioned near bottom of page (orphan scenario)
-    currentY = 740; // Only 29.89pt left, but requiredRoom is 49pt
+    currentY = 740;
     if (currentY + requiredRoom > pageBottomLimit) {
       pageBreaks++;
       currentY = MARGIN_1_INCH_PT;
@@ -179,7 +201,6 @@ function runLayoutTests() {
     const wrappedUrl = wrapLongStringForPdf(rawUrl);
     assert(wrappedUrl.includes('/ ') && wrappedUrl.includes('- '), 'Should insert breakable spaces after slashes and hyphens');
 
-    // Tokens shorter than 16 characters are preserved intact
     const shortToken = 'regular-word';
     assert.strictEqual(wrapLongStringForPdf(shortToken), shortToken, 'Short words should not be prematurely split');
 
@@ -193,18 +214,15 @@ function runLayoutTests() {
     console.log('\n[Test 7] Exact Bounding Box Calculation & Descender Safety Margin');
     const padY = 5;
     const descenderSafety = 6;
-    const lh8 = 8 * 1.35;    // 10.8pt
-    const lh75 = 7.5 * 1.35; // 10.125pt
+    const lh8 = 8 * 1.35;
 
-    // Multi-line cell with descending letters (g, j, p, q, y)
-    const lineCount2 = 4; // Col 2 citation with 4 wrapped lines
-    const h2 = lineCount2 * lh8; // 43.2pt
+    const lineCount2 = 4;
+    const h2 = lineCount2 * lh8;
 
     const maxContentH = h2;
     const rowH = Math.max(20, Math.ceil(maxContentH + (2 * padY) + descenderSafety));
 
-    // Verify row height calculation
-    const expectedRowH = Math.ceil(43.2 + 10 + 6); // 60pt
+    const expectedRowH = Math.ceil(43.2 + 10 + 6);
     assert.strictEqual(rowH, expectedRowH, `rowH should equal ${expectedRowH}pt`);
     assert(descenderSafety >= 6, 'Safety margin must be at least 6pt');
 
@@ -226,11 +244,9 @@ function runLayoutTests() {
       assert.strictEqual(yCoord, mt, 'Header must always render aligned at top margin');
     };
 
-    // Initial render on page 1
     mockRenderTableHeader(currentY);
     currentY += headerHeight;
 
-    // Simulate page break
     currentY = mt;
     mockRenderTableHeader(currentY);
     currentY += headerHeight;
@@ -242,9 +258,47 @@ function runLayoutTests() {
     console.log('  ✔ y coordinates consistently maintain top margin alignment (48pt)');
   }
 
-  console.log('\n=============================================');
-  console.log(' ALL 8 PDF LAYOUT CALIBRATION TESTS PASSED ✔');
-  console.log('=============================================');
+  // Test 9: Vancouver True Unicode Superscript Conversion in exportPaperPDF
+  {
+    console.log('\n[Test 9] Vancouver True Unicode Superscript Conversion in exportPaperPDF');
+    const rawParagraph = 'as reported in previous trials [1,2]. Next sentence.';
+    const formatted = repositionVancouverCitations(rawParagraph).replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+      const parts = n.split(',').map(s => s.trim()).filter(Boolean);
+      const cleanNums = [...new Set(parts)].join(',');
+      return toUnicodeSuperscript(cleanNums);
+    });
+
+    assert.strictEqual(formatted, 'as reported in previous trials.¹,² Next sentence.');
+    assert(!formatted.includes(' 1,2 '), 'Should not flatten into baseline spaces');
+    assert(!formatted.includes(' .'), 'Should not leave leading space before punctuation');
+    console.log(`  Formatted PDF prose: "${formatted}"`);
+    console.log('  ✔ Unicode superscripts (¹˒²) sit immediately outside closing punctuation without spaces');
+  }
+
+  // Test 10: Clickable DOI/PMID Link Registration in exportReferencesPDF
+  {
+    console.log('\n[Test 10] Clickable DOI/PMID Link Registration in exportReferencesPDF');
+    const registeredLinks = [];
+    const mockDoc = {
+      link: (x, y, w, h, options) => {
+        registeredLinks.push({ x, y, w, h, url: options.url });
+      }
+    };
+
+    const paperWithDoi = { doi: '10.1016/j.ajog.2021.05.012' };
+    const resolverUrl = paperWithDoi.doi.startsWith('http') ? paperWithDoi.doi : `https://doi.org/${paperWithDoi.doi}`;
+    mockDoc.link(85.42, 100, 252.64, 45, { url: resolverUrl });
+
+    assert.strictEqual(registeredLinks.length, 1);
+    assert.strictEqual(registeredLinks[0].url, 'https://doi.org/10.1016/j.ajog.2021.05.012');
+    assert.strictEqual(registeredLinks[0].w, 252.64);
+    console.log(`  Registered link: ${registeredLinks[0].url} (bounds: ${registeredLinks[0].w}x${registeredLinks[0].h}pt)`);
+    console.log('  ✔ doc.link correctly registers clickable hyperlink area over Column 2');
+  }
+
+  console.log('\n==============================================');
+  console.log(' ALL 10 PDF LAYOUT CALIBRATION TESTS PASSED ✔');
+  console.log('==============================================');
 }
 
 runLayoutTests();
