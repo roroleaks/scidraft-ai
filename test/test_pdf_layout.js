@@ -27,7 +27,7 @@ const TABLE_COL_PERCENTAGES = {
 // Soft word-break helper for DOIs, URLs, and long unbroken sequences in table cells:
 const wrapLongStringForPdf = (str) => {
   if (!str || typeof str !== 'string') return '';
-  return str.replace(/\S{16,}/g, (match) => {
+  return str.replace(/\S{28,}/g, (match) => {
     return match.replace(/([/\-])(?=[^\s])/g, '$1 ');
   });
 };
