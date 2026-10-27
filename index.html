@@ -3229,56 +3229,236 @@ function undoRemovePaper(){
 // ═══════════════════════════════════════════════════════════════
 // CITATION FORMATTERS & AUTHOR PARSERS (Vancouver / APA / Harvard)
 // ═══════════════════════════════════════════════════════════════
+
+/**
+ * Standardize single author name to: "Surname Initials" without internal periods.
+ * Examples: "Roshdy R", "Smith JA", "O'Connor MJ"
+ */
+function normalizeAuthorName(raw) {
+  if (!raw) return '';
+  let s = cleanHtmlText(String(raw)).trim();
+  s = s.replace(/\s+/g, ' ');
+
+  // If already formatted like "Surname Initials" (e.g., "Roshdy R", "Smith JA")
+  const mAlready = s.match(/^([A-Za-zÀ-ÿ\-']+(?:\s+[a-z]{1,4}\b)*)\s+([A-Z]{1,4})\.?$/);
+  if (mAlready) {
+    return `${mAlready[1]} ${mAlready[2].replace(/\./g, '')}`;
+  }
+
+  // If "Surname, Firstname Middlename" or "Surname, Initials"
+  if (s.includes(',')) {
+    const parts = s.split(',').map(p => p.trim());
+    const surname = parts[0];
+    const given = parts.slice(1).join(' ').trim();
+    if (!given) return surname;
+    const initials = given
+      .replace(/[^A-Za-zÀ-ÿ\s]/g, '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => w[0].toUpperCase())
+      .join('');
+    return `${surname} ${initials}`.trim();
+  }
+
+  // If "Firstname [Middlename] Surname"
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (tokens.length === 1) {
+    return tokens[0];
+  }
+
+  // Check if last token is already uppercase initials (e.g. "Smith J.A.")
+  const lastClean = tokens[tokens.length - 1].replace(/\./g, '');
+  if (/^[A-Z]{1,4}$/.test(lastClean)) {
+    const surname = tokens.slice(0, -1).join(' ');
+    return `${surname} ${lastClean}`;
+  }
+
+  // Standard: "Firstname Middlename Surname" -> Surname = last token, initials = preceding tokens
+  const surname = tokens[tokens.length - 1];
+  const givenTokens = tokens.slice(0, -1);
+  const initials = givenTokens
+    .map(t => t.replace(/[^A-Za-zÀ-ÿ]/g, ''))
+    .filter(Boolean)
+    .map(w => w[0].toUpperCase())
+    .join('');
+  return `${surname} ${initials}`.trim();
+}
+
+/**
+ * Parses raw author list input (string or array) into normalized author strings.
+ */
+function parseRawAuthors(authorsInput) {
+  if (!authorsInput) return [];
+  if (Array.isArray(authorsInput)) {
+    return authorsInput
+      .map(a => typeof a === 'object' && a !== null ? (a.name || a.authorName || `${a.lastName || ''} ${a.firstName || ''}`.trim()) : String(a))
+      .map(normalizeAuthorName)
+      .filter(Boolean);
+  }
+
+  const str = cleanHtmlText(String(authorsInput)).trim();
+  if (!str || str === 'Unknown Authors' || str === '—' || str.toLowerCase() === 'anonymous') {
+    return [];
+  }
+
+  const cleanStr = str.replace(/\band\b/gi, ',').trim();
+
+  // Split by semicolon if present
+  if (cleanStr.includes(';')) {
+    return cleanStr.split(/\s*;\s*/).map(normalizeAuthorName).filter(Boolean);
+  }
+
+  // If comma separated
+  const commaTokens = cleanStr.split(/\s*,\s*/).filter(Boolean);
+  const allLookAbbr = commaTokens.every(t => /^[A-Za-zÀ-ÿ\-']+\s+[A-Z]{1,4}\.?$/.test(t.trim()) || t.split(' ').length <= 2);
+  if (allLookAbbr && commaTokens.length > 1) {
+    return commaTokens.map(normalizeAuthorName).filter(Boolean);
+  }
+
+  // If pairs of Surname, Given Name
+  if (commaTokens.length >= 2 && commaTokens.length % 2 === 0) {
+    const pairs = [];
+    let isPair = true;
+    for (let i = 0; i < commaTokens.length; i += 2) {
+      if (commaTokens[i].split(/\s+/).length > 2) {
+        isPair = false;
+        break;
+      }
+      pairs.push(`${commaTokens[i]}, ${commaTokens[i + 1]}`);
+    }
+    if (isPair) {
+      return pairs.map(normalizeAuthorName).filter(Boolean);
+    }
+  }
+
+  return commaTokens.map(normalizeAuthorName).filter(Boolean);
+}
+
 function parseAuthorsList(authorsStr) {
-  if (!authorsStr || authorsStr === 'Unknown Authors' || authorsStr === '—') {
+  const normAuthors = parseRawAuthors(authorsStr);
+  if (!normAuthors.length) {
     return [{ surname: 'Anonymous', initials: '', raw: 'Anonymous' }];
   }
-  const clean = authorsStr.replace(/\band\b/gi, ',').trim();
-  const rawList = clean.split(/;\s*|,\s*(?=[A-Z][a-z]+(?:\s+[A-Z])|\b[A-Z][a-z]+\b)/).map(a => a.trim()).filter(Boolean);
-  const list = rawList.length > 1 ? rawList : clean.split(/,\s*/).map(a => a.trim()).filter(Boolean);
-  
-  return list.map(item => {
-    const s = item.replace(/\.$/, '').trim();
-    const m1 = s.match(/^([A-Za-z\-']+)\s+([A-Z]{1,3})$/);
-    if (m1) return { surname: m1[1], initials: m1[2], raw: item };
-    const m2 = s.match(/^([A-Za-z\-']+)(?:\s+[A-Z]\.?)?\s+([A-Za-z\-']+)$/);
-    if (m2) return { surname: m2[2], initials: m2[1][0], raw: item };
-    const m3 = s.match(/^([A-Za-z\-']+),\s*([A-Z]{1,3})\.?$/);
-    if (m3) return { surname: m3[1], initials: m3[2], raw: item };
-    const words = s.split(/\s+/);
-    return { surname: words[words.length - 1] || s, initials: words[0]?.[0] || '', raw: item };
+  return normAuthors.map(a => {
+    const spaceIdx = a.lastIndexOf(' ');
+    if (spaceIdx > 0) {
+      return {
+        surname: a.substring(0, spaceIdx),
+        initials: a.substring(spaceIdx + 1),
+        raw: a
+      };
+    }
+    return { surname: a, initials: '', raw: a };
   });
 }
 
-function formatVancouver(paper, num){
-  let ref = num !== undefined ? `${num}. ` : '';
-  const authors = cleanHtmlText(paper.authors);
-  if(authors && authors !== 'Unknown Authors'){
-    ref += authors.trim();
-    if(!ref.trimEnd().endsWith('.')) ref += '.';
-    ref += ' ';
+/**
+ * Requirement 1: Author Formatting
+ * - 1 to 6 authors: list all authors separated by commas.
+ * - > 6 authors: list the first 6 authors, followed by ", et al."
+ * - If no author is supplied, use institutional source or default to "Anonymous."
+ */
+function formatVancouverAuthors(paper) {
+  const authorsList = parseRawAuthors(paper.authors);
+
+  if (authorsList.length === 0) {
+    const institution = cleanHtmlText(paper.institution || paper.corporateAuthor || paper.organization || '');
+    if (institution) {
+      return institution.endsWith('.') ? institution : `${institution}.`;
+    }
+    return 'Anonymous.';
+  }
+
+  if (authorsList.length <= 6) {
+    return `${authorsList.join(', ')}.`;
+  }
+
+  // > 6 authors: list first 6, followed by ", et al."
+  const first6 = authorsList.slice(0, 6).join(', ');
+  return `${first6}, et al.`;
+}
+
+/**
+ * Requirement 2 & 3: Journal & Publication Anatomy + Identifiers & Linking
+ * Format: Author(s). Title. JournalAbbr. Year;Volume(Issue):Pages.
+ * Edge cases:
+ * - Missing Issue: Year;Volume:Pages.
+ * - Missing Volume & Issue: Year;Pages. or Year;Published online [Date].
+ * - Missing Pages: Use article number or e-locator (e.g., e0123456).
+ * Identifiers:
+ * - doi:10.xxxx/xxxx. (resolver link)
+ * - PMID: xxxxxxxx. (PubMed link)
+ */
+function formatVancouver(paper, num = null, options = { htmlLinks: false }){
+  let out = (num !== null && num !== undefined) ? `${num}. ` : '';
+
+  // 1. Author(s)
+  out += formatVancouverAuthors(paper) + ' ';
+
+  // 2. Title
+  const title = cleanHtmlText(paper.title || '').trim().replace(/\.$/, '');
+  if (title) {
+    out += `${title}. `;
+  }
+
+  // 3. Journal Abbreviation
+  const journalRaw = paper.journalAbbr || paper.medlineAbbr || paper.journal || '';
+  const journalAbbr = cleanHtmlText(journalRaw).trim().replace(/\.$/, '');
+  if (journalAbbr) {
+    out += `${journalAbbr}. `;
+  }
+
+  // 4. Publication Anatomy
+  const year = paper.year || (paper.pubDate ? new Date(paper.pubDate).getFullYear() : null) || '2024';
+  const vol = (paper.volume || '').toString().trim();
+  const issue = (paper.issue || '').toString().trim();
+  const pages = (paper.pages || paper.pageRange || '').toString().trim();
+  const articleNum = (paper.articleNumber || paper.elocationId || paper.elocator || '').toString().trim();
+  const pageOrElocator = pages || articleNum;
+  const pubDateOnline = paper.publishedOnlineDate || paper.electronicPubDate || paper.onlineDate || null;
+
+  let pubAnatomy = '';
+  if (vol && issue && pageOrElocator) {
+    pubAnatomy = `${year};${vol}(${issue}):${pageOrElocator}.`;
+  } else if (vol && !issue && pageOrElocator) {
+    pubAnatomy = `${year};${vol}:${pageOrElocator}.`;
+  } else if (vol && issue && !pageOrElocator) {
+    pubAnatomy = `${year};${vol}(${issue}).`;
+  } else if (vol && !issue && !pageOrElocator) {
+    pubAnatomy = `${year};${vol}.`;
+  } else if (!vol && !issue && pageOrElocator) {
+    pubAnatomy = `${year};${pageOrElocator}.`;
+  } else if (pubDateOnline) {
+    pubAnatomy = `${year};Published online ${pubDateOnline}.`;
   } else {
-    ref += 'Anonymous. ';
+    pubAnatomy = `${year}.`;
   }
-  const title = cleanHtmlText(paper.title);
-  if(title){
-    ref += title.trim().replace(/\.$/, '') + '. ';
+
+  out += pubAnatomy;
+
+  // 5. Identifiers & Linking
+  const cleanDoi = normalizeDoi(paper.doi);
+  const cleanPmid = paper.pmid ? String(paper.pmid).trim() : '';
+
+  if (cleanDoi) {
+    const doiText = `doi:${cleanDoi}.`;
+    if (options && options.htmlLinks) {
+      out += ` <a href="https://doi.org/${encodeURIComponent(cleanDoi)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${doiText}</a>`;
+    } else {
+      out += ` ${doiText}`;
+    }
   }
-  const journal = cleanHtmlText(paper.journal);
-  if(journal){
-    ref += journal.trim() + '. ';
+
+  if (cleanPmid) {
+    const pmidText = `PMID: ${cleanPmid}.`;
+    if (options && options.htmlLinks) {
+      out += ` <a href="https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(cleanPmid)}/" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${pmidText}</a>`;
+    } else {
+      out += ` ${pmidText}`;
+    }
   }
-  ref += paper.year || 2020;
-  if(paper.volume){
-    ref += ';' + paper.volume;
-    if(paper.issue) ref += '(' + paper.issue + ')';
-    if(paper.pages) ref += ':' + paper.pages;
-  }
-  ref += '.';
-  const cleanDoi = (paper.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
-  if(cleanDoi) ref += ` doi:${cleanDoi}`;
-  if(paper.pmid) ref += ` PMID: ${paper.pmid}`;
-  return ref.trim();
+
+  return out.trim();
 }
 
 function formatAPA(paper, num){
@@ -3320,7 +3500,7 @@ function formatAPA(paper, num){
     ref += '.';
   }
 
-  const cleanDoi = (paper.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
+  const cleanDoi = normalizeDoi(paper.doi);
   if(cleanDoi){
     ref += ` https://doi.org/${cleanDoi}`;
   } else if(paper.pmid){
@@ -3361,7 +3541,7 @@ function formatHarvard(paper, num){
     ref += '.';
   }
 
-  const cleanDoi = (paper.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
+  const cleanDoi = normalizeDoi(paper.doi);
   if(cleanDoi){
     ref += ` Available at: https://doi.org/${cleanDoi}.`;
   } else if(paper.pmid){
@@ -3397,7 +3577,6 @@ function formatInTextCitation(indices, style = STATE.citationStyle || 'vancouver
     return `(${parts.join('; ')})`;
   } else {
     // Vancouver — Uppercase / Superscript with NO brackets
-    // As per user request: "note that vancover must be uppercase and with no barckets"
     const nums = [...new Set(validIdxs.map(i => i + 1))].join(',');
     return nums;
   }
@@ -3441,12 +3620,141 @@ function parseParagraphTokens(paraText, citationStyle = STATE.citationStyle || '
   return tokens;
 }
 
+/**
+ * Requirement 4: In-Text Numbering Engine
+ * Pass 1: Parse the draft manuscript text, detect all cited keys in chronological order of appearance.
+ * Pass 2: Assign [1], [2], [3] sequentially. Re-order the reference list array to match this exact sequence.
+ * Pass 3: Flag any reference present in the bibliography that was never cited in the body text with an in-editor warning.
+ */
+class InTextNumberingEngine {
+  static process(manuscript, bibliography) {
+    const papers = Array.isArray(bibliography) ? [...bibliography] : [];
+
+    const getSectionTexts = () => {
+      if (typeof manuscript === 'string') return [manuscript];
+      const sections = [];
+      if (manuscript.title) sections.push({ key: 'title', text: manuscript.title });
+      if (manuscript.abstractObj) {
+        for (const [k, v] of Object.entries(manuscript.abstractObj)) {
+          sections.push({ key: `abstractObj.${k}`, text: v });
+        }
+      }
+      if (manuscript.intro) sections.push({ key: 'intro', text: manuscript.intro });
+      if (manuscript.methods) sections.push({ key: 'methods', text: manuscript.methods });
+      if (manuscript.results) sections.push({ key: 'results', text: manuscript.results });
+      if (manuscript.discussion) sections.push({ key: 'discussion', text: manuscript.discussion });
+      if (manuscript.conclusion) sections.push({ key: 'conclusion', text: manuscript.conclusion });
+      return sections;
+    };
+
+    // PASS 1: Parse manuscript text, detect all cited keys in chronological order of appearance
+    const citationRegex = /\[(\d+(?:,\s*\d+)*)\]/g;
+    const orderedCitedKeys = [];
+    const seenKeysSet = new Set();
+
+    const sections = getSectionTexts();
+    for (const sec of sections) {
+      let match;
+      citationRegex.lastIndex = 0;
+      while ((match = citationRegex.exec(sec.text)) !== null) {
+        const rawNums = match[1].split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        for (const rawNum of rawNums) {
+          if (!seenKeysSet.has(rawNum)) {
+            seenKeysSet.add(rawNum);
+            orderedCitedKeys.push(rawNum);
+          }
+        }
+      }
+    }
+
+    // PASS 2: Assign [1], [2], [3] sequentially. Re-order reference list array to match this exact sequence.
+    const keyToNewSequentialNum = new Map();
+    const orderedReferences = [];
+
+    orderedCitedKeys.forEach((oldNum, idx) => {
+      const newNum = idx + 1;
+      keyToNewSequentialNum.set(oldNum, newNum);
+
+      const paperIndex = oldNum - 1;
+      const paper = papers[paperIndex];
+      if (paper) {
+        orderedReferences.push({
+          num: newNum,
+          paper,
+          origIdx: paperIndex,
+          text: formatVancouver(paper, newNum),
+          html: formatVancouver(paper, newNum, { htmlLinks: true })
+        });
+      }
+    });
+
+    // Re-map citation numbers in the manuscript text
+    const renumberSectionText = (text) => {
+      if (!text) return '';
+      return text.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (fullMatch, numsStr) => {
+        const nums = numsStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+        const newNums = nums.map(n => keyToNewSequentialNum.get(n) || n);
+        const uniqueSorted = [...new Set(newNums)].sort((a, b) => a - b);
+        return `[${uniqueSorted.join(',')}]`;
+      });
+    };
+
+    let updatedManuscript;
+    if (typeof manuscript === 'string') {
+      updatedManuscript = renumberSectionText(manuscript);
+    } else {
+      updatedManuscript = { ...manuscript };
+      if (updatedManuscript.title) updatedManuscript.title = renumberSectionText(updatedManuscript.title);
+      if (updatedManuscript.abstractObj) {
+        updatedManuscript.abstractObj = { ...updatedManuscript.abstractObj };
+        for (const [k, v] of Object.entries(updatedManuscript.abstractObj)) {
+          updatedManuscript.abstractObj[k] = renumberSectionText(v);
+        }
+      }
+      if (updatedManuscript.intro) updatedManuscript.intro = renumberSectionText(updatedManuscript.intro);
+      if (updatedManuscript.methods) updatedManuscript.methods = renumberSectionText(updatedManuscript.methods);
+      if (updatedManuscript.results) updatedManuscript.results = renumberSectionText(updatedManuscript.results);
+      if (updatedManuscript.discussion) updatedManuscript.discussion = renumberSectionText(updatedManuscript.discussion);
+      if (updatedManuscript.conclusion) updatedManuscript.conclusion = renumberSectionText(updatedManuscript.conclusion);
+      updatedManuscript.references = orderedReferences;
+    }
+
+    // PASS 3: Flag any reference present in the bibliography that was never cited in the body text with an in-editor warning
+    const uncitedReferences = [];
+    const warnings = [];
+
+    papers.forEach((paper, index) => {
+      const oneBasedKey = index + 1;
+      if (!seenKeysSet.has(oneBasedKey)) {
+        uncitedReferences.push({
+          origIdx: index,
+          paper,
+          title: paper.title || 'Untitled',
+          authors: formatVancouverAuthors(paper)
+        });
+        warnings.push(`Reference candidate #${oneBasedKey} ("${(paper.title || 'Untitled').substring(0, 60)}…") is present in the bibliography candidate pool but was never cited in the manuscript body text.`);
+      }
+    });
+
+    return {
+      updatedManuscript,
+      orderedReferences,
+      uncitedReferences,
+      warnings,
+      isFullyGrounded: uncitedReferences.length === 0,
+      totalCited: orderedCitedKeys.length,
+      totalCandidates: papers.length
+    };
+  }
+}
+
 function formatPaperReferences(papers, style = STATE.citationStyle || 'vancouver'){
   if(!papers || !papers.length) return [];
   if(style === 'vancouver'){
     return papers.map((p, idx) => ({
       num: idx + 1,
       text: formatVancouver(p, idx + 1),
+      html: formatVancouver(p, idx + 1, { htmlLinks: true }),
       paper: p,
       origIdx: idx
     }));
@@ -3465,6 +3773,7 @@ function formatPaperReferences(papers, style = STATE.citationStyle || 'vancouver
   return sorted.map((item, idx) => ({
     num: idx + 1,
     text: style === 'apa' ? formatAPA(item.paper, idx + 1) : formatHarvard(item.paper, idx + 1),
+    html: style === 'apa' ? formatAPA(item.paper, idx + 1) : formatHarvard(item.paper, idx + 1),
     paper: item.paper,
     origIdx: item.origIdx
   }));
@@ -3657,7 +3966,7 @@ class PaperGenerator {
   }
 
   generate(){
-    return {
+    const rawDraft = {
       title:       this.generateTitle(),
       abstractObj: this.generateAbstractObj(),
       keywords:    this.generateKeywords(),
@@ -3668,6 +3977,18 @@ class PaperGenerator {
       conclusion:  this.generateConclusion(),
       references:  this.generateReferences()
     };
+
+    // Apply 3-Pass In-Text Numbering Engine for deterministic ICMJE/NLM Vancouver sequence
+    const proc = InTextNumberingEngine.process(rawDraft, this.papers);
+    const finalDraft = proc.updatedManuscript;
+    finalDraft.uncitedReferences = proc.uncitedReferences;
+    finalDraft.citationWarnings = proc.warnings;
+    finalDraft.isFullyGrounded = proc.isFullyGrounded;
+    if (proc.orderedReferences && proc.orderedReferences.length > 0) {
+      finalDraft.references = proc.orderedReferences;
+    }
+
+    return finalDraft;
   }
 }
 
@@ -3757,7 +4078,8 @@ class PaperReviewEngine {
       });
     }
 
-    // 4. Citation Progression & Grounding Audit
+    // 4. Citation Progression & Grounding Audit (ICMJE / NLM Vancouver Sequential Grounding)
+    const uncited = (paper && paper.uncitedReferences) ? paper.uncitedReferences : [];
     const citeTokens = manuscriptText.match(/\[(\d+(?:,\s*\d+)*)\]/g) || [];
     const citedNums = new Set();
     citeTokens.forEach(t => {
@@ -3765,7 +4087,7 @@ class PaperReviewEngine {
       inner.split(',').forEach(n => citedNums.add(parseInt(n.trim())));
     });
     const maxCited = Math.max(...citedNums, 0);
-    const hasOrphans = citedNums.size > totalRefs || maxCited > totalRefs;
+    const hasOrphans = citedNums.size > totalRefs || maxCited > totalRefs || uncited.length > 0;
     if (!hasOrphans && citedNums.size === totalRefs) {
       passCount++;
       findings.push({
@@ -3773,15 +4095,17 @@ class PaperReviewEngine {
         status: 'PASS',
         badge: `✔ ${citedNums.size}/${totalRefs} Grounded`,
         color: 'var(--good)',
-        detail: `All ${totalRefs} references are cited sequentially in-text without orphan citations or missing indices.`
+        detail: `All ${totalRefs} references are cited in strict chronological sequence (1 to ${totalRefs}) in accordance with ICMJE/NLM Vancouver standards. Zero uncited references detected.`
       });
     } else {
       findings.push({
         name: 'Vancouver Citation Grounding & Order',
         status: 'WARN',
-        badge: '⚠️ Citation Mismatch',
+        badge: uncited.length > 0 ? `⚠️ ${uncited.length} Uncited Record(s)` : '⚠️ Citation Mismatch',
         color: 'var(--warn)',
-        detail: `${citedNums.size} unique citation tags mapped against ${totalRefs} bibliographic items.`
+        detail: uncited.length > 0
+          ? `${uncited.length} reference(s) present in the bibliography were never cited in body text: ${uncited.map(u => `Ref #${u.origIdx+1} ("${(u.title||'').substring(0,35)}…")`).join(', ')}.`
+          : `${citedNums.size} unique citation tags mapped against ${totalRefs} bibliographic items.`
       });
     }
 
@@ -3937,7 +4261,18 @@ function renderPaperPreview(paper){
   const srcName = STATE.searchSource === 's2' ? 'Semantic Scholar (Allen Institute for AI)' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
   const citeStyleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard (Author-Year)' : 'Vancouver (ICMJE Pure Superscript, No Brackets)';
 
+  const uncitedWarningsHTML = (paper.citationWarnings && paper.citationWarnings.length > 0)
+    ? `<div class="alert-box alert-warn" style="margin-bottom:18px">
+         <div class="alert-title">⚠️ In-Editor Citation Grounding Warning (${paper.citationWarnings.length} Uncited Record${paper.citationWarnings.length===1?'':'s'})</div>
+         <div class="alert-reason" style="margin-top:6px">
+           ${paper.citationWarnings.map(w => `<div style="margin-bottom:4px">• ${esc(w)}</div>`).join('')}
+         </div>
+         <div class="alert-advice">💡 Vancouver (ICMJE/NLM) standard requires all listed references to be cited in-text. Chronological renumbering has been applied to cited references.</div>
+       </div>`
+    : '';
+
   document.getElementById('paper-preview').innerHTML = `
+    ${uncitedWarningsHTML}
     <h1>${esc(paper.title)}</h1>
     <div class="p-meta">SciDraft AI — AI-Assisted Literature Review Draft · ${today}<br/><em>Data source: ${srcName} · Deduplication: ${STATE.duplicatesRemoved || 0} duplicates excluded · Year filter: last ${STATE.yearRange < 99 ? STATE.yearRange + ' years' : 'all time'} · In-text citations: ${citeStyleLabel}</em></div>
     <hr/>
@@ -3955,7 +4290,7 @@ function renderPaperPreview(paper){
     ${sectionHTML('4', 'Discussion', paper.discussion)}
     ${sectionHTML('5', 'Conclusion', paper.conclusion)}
     <div class="s-head">References (${esc(citeStyleLabel)})</div>
-    ${paper.references.map(r => `<p class="ref-e" id="ref-anchor-${r.num}"><strong>${r.num}.</strong> ${esc(r.text.replace(/^\d+\.\s*/, ''))}</p>`).join('')}
+    ${paper.references.map(r => `<p class="ref-e" id="ref-anchor-${r.num}"><strong>${r.num}.</strong> ${r.html ? r.html.replace(/^\d+\.\s*/, '') : esc(r.text.replace(/^\d+\.\s*/, ''))}</p>`).join('')}
   `;
 }
 
@@ -3967,9 +4302,10 @@ function renderReferencesTab(paper){
     paper.references.map((r, idx)=>{
       const orig = r.paper || STATE.papers[r.origIdx !== undefined ? r.origIdx : idx];
       const srcBadge = orig ? getSourceBadgeHTML(orig) : '';
+      const refContent = r.html ? r.html.replace(/^\d+\.\s*/, '') : esc(r.text);
       return `<li style="margin-bottom:12px;line-height:1.5" id="ref-tab-${r.num}">
         <div style="margin-bottom:4px;display:flex;align-items:center;gap:6px">${srcBadge}</div>
-        <div>${esc(r.text)}</div>
+        <div><strong>${r.num}.</strong> ${refContent}</div>
       </li>`;
     }).join('');
 }
