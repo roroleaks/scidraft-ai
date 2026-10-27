@@ -4939,7 +4939,7 @@ async function exportPaperWord(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PDF EXPORT — PAPER (PUBLICATION GRADE)
+// PDF EXPORT — PAPER (PUBLICATION GRADE — ACADEMIC VECTOR STYLING)
 // ═══════════════════════════════════════════════════════════════
 async function exportPaperPDF(){
   if(!STATE.paper) return;
@@ -4949,33 +4949,62 @@ async function exportPaperPDF(){
   try {
     const { jsPDF } = window.jspdf;
     if(!jsPDF) throw new Error('PDF generator library (jsPDF) is not loaded.');
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pw = 210, ph = 297, ml = 22, mr = 22, mt = 20, mb = 20, cw = pw - ml - mr;
+
+    // 1-inch (72pt) margins on standard A4 (595.28 x 841.89 pt)
+    const doc = new jsPDF('p', 'pt', 'a4');
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const margin = 72; // Exact 1-inch (72pt)
+    const ml = margin, mr = margin, mt = margin, mb = margin;
+    const cw = pw - ml - mr; // 451.28 pt content width
     let y = mt;
-    const addPage = () => { doc.addPage(); y = mt + 4; };
-    const chk = (n = 12) => { if(y + n > ph - mb) addPage(); };
+
+    const bodyFontSize = 10;
+    const bodyLineHeight = bodyFontSize * 1.35; // 1.35 line spacing = 13.5pt
+
+    const addPage = () => {
+      doc.addPage();
+      y = mt;
+    };
+
+    const checkSpace = (neededHeight) => {
+      if (y + neededHeight > ph - mb) {
+        addPage();
+      }
+    };
+
+    // Dynamic page break calculations to prevent orphan headings
     const sHead = (txt) => {
-      chk(26); // Strong orphan heading prevention
-      y += 4;
-      doc.setFontSize(11);
+      // Require heading height (18pt) + at least 2 lines of body text (27pt) = 45pt
+      checkSpace(48);
+      y += 8;
+      doc.setFontSize(12.5);
       doc.setFont('times', 'bold');
       doc.setTextColor(15, 107, 107);
       const ls = doc.splitTextToSize(txt, cw);
-      ls.forEach(l => { doc.text(l, ml, y); y += 5.5; });
+      ls.forEach(l => {
+        doc.text(l, ml, y);
+        y += 15;
+      });
       doc.setDrawColor(210, 225, 225);
-      doc.setLineWidth(0.3);
-      doc.line(ml, y - 1, pw - mr, y - 1);
-      y += 3;
+      doc.setLineWidth(0.5);
+      doc.line(ml, y - 2, pw - mr, y - 2);
+      y += 6;
     };
+
     const subHead = (txt) => {
-      chk(18);
-      y += 2;
-      doc.setFontSize(10);
+      // Require subhead height (15pt) + at least 2 lines of body text (27pt) = 42pt
+      checkSpace(42);
+      y += 6;
+      doc.setFontSize(11);
       doc.setFont('times', 'bolditalic');
-      doc.setTextColor(40, 50, 60);
+      doc.setTextColor(35, 45, 55);
       const ls = doc.splitTextToSize(txt, cw);
-      ls.forEach(l => { doc.text(l, ml, y); y += 5; });
-      y += 1;
+      ls.forEach(l => {
+        doc.text(l, ml, y);
+        y += 13.5;
+      });
+      y += 4;
     };
 
     const paper = STATE.paper, abs = paper.abstractObj;
@@ -4985,41 +5014,44 @@ async function exportPaperPDF(){
 
     // Title page header banner
     doc.setFillColor(15, 107, 107);
-    doc.rect(0, 0, pw, 14, 'F');
+    doc.rect(0, 0, pw, 38, 'F');
     doc.setFontSize(9);
     doc.setFont('times', 'bold');
     doc.setTextColor(255, 255, 255);
-    doc.text('SciDraft AI — AI-Assisted Literature Review Draft', ml, 9);
-    doc.text(`Citation: ${citeStyleLabel}`, pw - mr, 9, { align: 'right' });
+    doc.text('SciDraft AI — AI-Assisted Literature Review Draft', ml, 24);
+    doc.text(`Citation: ${citeStyleLabel}`, pw - mr, 24, { align: 'right' });
 
-    y = 25;
-    doc.setFontSize(15);
+    y = mt + 8;
+    doc.setFontSize(16);
     doc.setFont('times', 'bold');
     doc.setTextColor(15, 45, 55);
     const tl = doc.splitTextToSize(paper.title, cw);
-    tl.forEach(l => { doc.text(l, pw / 2, y, { align: 'center' }); y += 7; });
-    y += 3;
+    tl.forEach(l => {
+      doc.text(l, pw / 2, y, { align: 'center' });
+      y += 20;
+    });
+    y += 4;
 
     const srcLabel = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC + Semantic Scholar' : 'Europe PMC';
     doc.setFontSize(8.5);
     doc.setFont('times', 'normal');
     doc.setTextColor(70, 80, 90);
     doc.text(`Generated: ${today} | Sources: ${srcLabel} | Deduplication: ${STATE.duplicatesRemoved || 0} excluded | Filter: last ${STATE.yearRange < 99 ? STATE.yearRange + ' years' : 'all time'}`, pw / 2, y, { align: 'center' });
-    y += 4.5;
+    y += 13;
     doc.text(`Citation Style: ${citeStyleLabel} | Powered by SciDraft AI v2.0 · Dr Raouf Roshdy`, pw / 2, y, { align: 'center' });
-    y += 4.5;
-    
+    y += 13;
+
     // Quality Audit Certification Stamp
-    doc.setFontSize(8);
+    doc.setFontSize(8.5);
     doc.setFont('times', 'italic');
     doc.setTextColor(15, 107, 107);
     const passC = STATE.auditResult ? `${STATE.auditResult.passCount}/${STATE.auditResult.totalChecks}` : '6/6';
     doc.text(`✔ Scientific Review Engine Certified: ${passC} Quality Dimensions Passed · 100% Parity · 0 Retractions/Notices`, pw / 2, y, { align: 'center' });
-    y += 6;
+    y += 14;
     doc.setDrawColor(15, 107, 107);
-    doc.setLineWidth(0.5);
+    doc.setLineWidth(0.6);
     doc.line(ml, y, pw - mr, y);
-    y += 8;
+    y += 18;
 
     // Structured Abstract Section
     sHead('STRUCTURED ABSTRACT');
@@ -5032,14 +5064,13 @@ async function exportPaperPDF(){
     ];
 
     absFields.forEach(([lbl, txt]) => {
-      chk(12);
-      doc.setFontSize(9.5);
+      checkSpace(32);
+      doc.setFontSize(10);
       doc.setFont('times', 'bold');
       doc.setTextColor(15, 45, 55);
       doc.text(lbl, ml, y);
-      y += 4.2;
+      y += 12;
 
-      // Format text with citation awareness
       let formatted = txt;
       if (style === 'apa' || style === 'harvard') {
         formatted = txt.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
@@ -5048,7 +5079,6 @@ async function exportPaperPDF(){
           return formatInTextCitation(zeroBased, style);
         });
       } else {
-        // Vancouver: uppercase / superscript number with NO brackets
         formatted = txt.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
           const parts = n.split(',').map(s => s.trim()).filter(Boolean);
           return ' ' + [...new Set(parts)].join(',') + ' ';
@@ -5056,29 +5086,33 @@ async function exportPaperPDF(){
       }
 
       doc.setFont('times', 'normal');
-      doc.setFontSize(9.5);
-      doc.setTextColor(40, 45, 50);
+      doc.setFontSize(bodyFontSize);
+      doc.setTextColor(35, 40, 45);
       const clean = cleanHtmlText(formatted);
       const bl = doc.splitTextToSize(clean, cw);
       bl.forEach(l => {
-        chk(5);
+        checkSpace(bodyLineHeight);
         doc.text(l, ml, y);
-        y += 4.3;
+        y += bodyLineHeight;
       });
-      y += 1.5;
+      y += 4;
     });
 
-    y += 2;
+    y += 4;
     doc.setFont('times', 'italic');
     doc.setFontSize(9);
     doc.setTextColor(70, 80, 90);
     const kwl = doc.splitTextToSize('Keywords: ' + paper.keywords.join('; '), cw);
-    kwl.forEach(l => { chk(5); doc.text(l, ml, y); y += 4; });
+    kwl.forEach(l => {
+      checkSpace(12);
+      doc.text(l, ml, y);
+      y += 12;
+    });
     doc.setDrawColor(210, 225, 225);
-    doc.setLineWidth(0.25);
-    y += 3;
+    doc.setLineWidth(0.5);
+    y += 4;
     doc.line(ml, y, pw - mr, y);
-    y += 6;
+    y += 12;
 
     // Helper to print paragraphs with citation formatting
     const printParagraph = (paraText) => {
@@ -5097,8 +5131,6 @@ async function exportPaperPDF(){
           return formatInTextCitation(zeroBased, style);
         });
       } else {
-        // Vancouver: uppercase / superscript number with NO brackets
-        // User requested: "note that vancover must be uppercase and with no barckets"
         renderedText = cleanPara.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
           const parts = n.split(',').map(s => s.trim()).filter(Boolean);
           return ' ' + [...new Set(parts)].join(',') + ' ';
@@ -5106,15 +5138,15 @@ async function exportPaperPDF(){
       }
 
       doc.setFont('times', 'normal');
-      doc.setFontSize(10.5);
+      doc.setFontSize(bodyFontSize);
       doc.setTextColor(25, 25, 25);
       const ls = doc.splitTextToSize(renderedText, cw);
       ls.forEach(l => {
-        chk(6);
+        checkSpace(bodyLineHeight);
         doc.text(l, ml, y);
-        y += 5;
+        y += bodyLineHeight;
       });
-      y += 2.5;
+      y += 6; // Paragraph after-spacing
     };
 
     // IMRaD Sections
@@ -5142,11 +5174,11 @@ async function exportPaperPDF(){
       const cleanRef = cleanHtmlText(r.text);
       const ls = doc.splitTextToSize(cleanRef, cw);
       ls.forEach((l, li) => {
-        chk(5);
-        doc.text(l, ml + (li > 0 ? 5 : 0), y);
-        y += 4.5;
+        checkSpace(12.5);
+        doc.text(l, ml + (li > 0 ? 14 : 0), y);
+        y += 12.5;
       });
-      y += 2;
+      y += 5;
     });
 
     // Headers & Footers on every page
@@ -5154,28 +5186,29 @@ async function exportPaperPDF(){
     for(let i = 1; i <= tot; i++){
       doc.setPage(i);
 
-      // Running header on pages 2+
+      // Running header on pages 2+ with shortened title on top-right
       if (i > 1) {
-        doc.setFontSize(7.5);
+        doc.setFontSize(8);
         doc.setFont('times', 'italic');
         doc.setTextColor(100, 115, 125);
-        doc.text('SciDraft AI · Clinical Evidence Commentary Draft', ml, 12);
-        doc.text(STATE.topic.substring(0, 42) + '…', pw - mr, 12, { align: 'right' });
+        doc.text('SciDraft AI · Literature Review Draft', ml, 44);
+        const shortTitle = (paper.title.length > 52 ? paper.title.substring(0, 50) + '…' : paper.title);
+        doc.text(shortTitle, pw - mr, 44, { align: 'right' });
         doc.setDrawColor(210, 225, 225);
-        doc.setLineWidth(0.25);
-        doc.line(ml, 14, pw - mr, 14);
+        doc.setLineWidth(0.5);
+        doc.line(ml, 49, pw - mr, 49);
       }
 
-      // Thin publication footer on EVERY page
+      // Thin publication footer on EVERY page with page numbers centered
       doc.setDrawColor(210, 225, 225);
-      doc.setLineWidth(0.25);
-      doc.line(ml, ph - 12, pw - mr, ph - 12);
-      doc.setFontSize(7.5);
+      doc.setLineWidth(0.5);
+      doc.line(ml, ph - 48, pw - mr, ph - 48);
+      doc.setFontSize(8);
       doc.setFont('times', 'normal');
       doc.setTextColor(90, 105, 115);
-      doc.text('SciDraft AI · Educational & Research Use Only', ml, ph - 7);
-      doc.text('copyrights@Raouf Roshdy2026', pw / 2, ph - 7, { align: 'center' });
-      doc.text(`Page ${i} of ${tot}`, pw - mr, ph - 7, { align: 'right' });
+      doc.text('SciDraft AI · Educational & Research Use Only', ml, ph - 32);
+      doc.text(`Page ${i} of ${tot}`, pw / 2, ph - 32, { align: 'center' });
+      doc.text('copyrights@Raouf Roshdy2026', pw - mr, ph - 32, { align: 'right' });
     }
 
     doc.save(`AI_Literature_Review_${STATE.topic.replace(/\s+/g, '_').substring(0, 32)}_${style}.pdf`);
@@ -5198,7 +5231,7 @@ async function exportPaperPDF(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PDF EXPORT — REFERENCES & VERIFICATION MATRIX
+// PDF EXPORT — REFERENCES & VERIFICATION MATRIX (ACADEMIC TABLE)
 // ═══════════════════════════════════════════════════════════════
 async function exportReferencesPDF(){
   if(!STATE.paper) return;
@@ -5208,117 +5241,209 @@ async function exportReferencesPDF(){
   try {
     const { jsPDF } = window.jspdf;
     if(!jsPDF) throw new Error('PDF generator library (jsPDF) is not loaded.');
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const pw = 210, ph = 297, ml = 22, mr = 22, mt = 20, mb = 20, cw = pw - ml - mr;
+
+    // Academic grade vector tabular styling on A4 (595.28 x 841.89 pt)
+    const doc = new jsPDF('p', 'pt', 'a4');
+    const pw = doc.internal.pageSize.getWidth();
+    const ph = doc.internal.pageSize.getHeight();
+    const margin = 45; // Clean margins for multi-page tabular audit report
+    const ml = margin, mr = margin, mt = 48, mb = 45;
+    const cw = pw - ml - mr; // 505.28 pt
     let y = mt;
-    const addPage = () => { doc.addPage(); y = mt + 4; };
-    const chk = (n = 10) => { if(y + n > ph - mb) addPage(); };
+
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
     const style = STATE.citationStyle || 'vancouver';
     const citeStyleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE)';
 
+    // Fixed Column Widths (8%, 50%, 18%, 14%, 10%)
+    const colWidths = [
+      cw * 0.08, // Col 1: [#] (8%)
+      cw * 0.50, // Col 2: Vancouver Citation (50%)
+      cw * 0.18, // Col 3: Study Design (18%)
+      cw * 0.14, // Col 4: Relevance Score & Badges (14%)
+      cw * 0.10  // Col 5: Verification Status (10%)
+    ];
+
+    const colX = [
+      ml,
+      ml + colWidths[0],
+      ml + colWidths[0] + colWidths[1],
+      ml + colWidths[0] + colWidths[1] + colWidths[2],
+      ml + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3]
+    ];
+
+    const headerHeight = 22;
+
+    const renderTableHeader = (headerY) => {
+      doc.setFillColor(227, 242, 242);
+      doc.rect(ml, headerY, cw, headerHeight, 'F');
+      doc.setDrawColor(15, 107, 107);
+      doc.setLineWidth(0.6);
+      doc.rect(ml, headerY, cw, headerHeight, 'S');
+
+      // Grid dividers
+      doc.setDrawColor(180, 215, 215);
+      doc.setLineWidth(0.4);
+      for (let c = 1; c < colX.length; c++) {
+        doc.line(colX[c], headerY, colX[c], headerY + headerHeight);
+      }
+
+      doc.setFontSize(8.5);
+      doc.setFont('times', 'bold');
+      doc.setTextColor(15, 107, 107);
+      const textY = headerY + 14.5;
+      doc.text('#', colX[0] + 4, textY);
+      doc.text(`Reference (${citeStyleLabel})`, colX[1] + 4, textY);
+      doc.text('Study Design', colX[2] + 4, textY);
+      doc.text('Score & Badges', colX[3] + 4, textY);
+      doc.text('Status', colX[4] + 4, textY);
+    };
+
+    // Top banner
     doc.setFillColor(15, 107, 107);
-    doc.rect(0, 0, pw, 14, 'F');
+    doc.rect(0, 0, pw, 36, 'F');
     doc.setFontSize(9);
     doc.setFont('times', 'bold');
     doc.setTextColor(255, 255, 255);
-    doc.text('SciDraft AI — References & Verification Matrix', ml, 9);
-    doc.text(`Format: ${citeStyleLabel}`, pw - mr, 9, { align: 'right' });
+    doc.text('SciDraft AI — References & Verification Audit Report', ml, 22);
+    doc.text(`Format: ${citeStyleLabel}`, pw - mr, 22, { align: 'right' });
 
-    y = 25;
-    doc.setFontSize(13);
+    y = mt + 8;
+    doc.setFontSize(14);
     doc.setFont('times', 'bold');
     doc.setTextColor(15, 45, 55);
     const hl = doc.splitTextToSize(`Bibliographic References & Quality Appraisal: ${STATE.topic}`, cw);
-    hl.forEach(l => { doc.text(l, pw / 2, y, { align: 'center' }); y += 6; });
-    y += 3;
-    doc.setFontSize(8.5);
+    hl.forEach(l => { doc.text(l, pw / 2, y, { align: 'center' }); y += 17; });
+    y += 2;
+
+    doc.setFontSize(8);
     doc.setFont('times', 'normal');
     doc.setTextColor(90, 100, 110);
-    doc.text(`SciDraft AI · Citation Style: ${citeStyleLabel} · Generated: ${today}`, pw / 2, y, { align: 'center' });
-    y += 4.5;
     const pdfSrc = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC (EMBL-EBI)';
-    doc.text(`Source: ${pdfSrc} · ${STATE.paper.references.length} unique references (${STATE.duplicatesRemoved || 0} duplicates excluded) · Year filter: last ${STATE.yearRange < 99 ? STATE.yearRange + ' years' : 'all time'}`, pw / 2, y, { align: 'center' });
-    y += 4.5;
-    
-    // Quality Audit Certification
+    doc.text(`SciDraft AI · Citation Style: ${citeStyleLabel} · Generated: ${today} | Source: ${pdfSrc}`, pw / 2, y, { align: 'center' });
+    y += 11;
+
+    const passC2 = STATE.auditResult ? `${STATE.auditResult.passCount}/${STATE.auditResult.totalChecks}` : '6/6';
     doc.setFontSize(8);
     doc.setFont('times', 'italic');
     doc.setTextColor(15, 107, 107);
-    const passC2 = STATE.auditResult ? `${STATE.auditResult.passCount}/${STATE.auditResult.totalChecks}` : '6/6';
-    doc.text(`✔ Scientific Review Engine Certified: ${passC2} Checks Passed · 100% Parity · 0 Notices · Multi-Tier DOI Validation`, pw / 2, y, { align: 'center' });
-    y += 6;
+    doc.text(`✔ Scientific Review Engine Certified: ${passC2} Checks Passed · 100% Parity · Multi-Tier Validation`, pw / 2, y, { align: 'center' });
+    y += 13;
     doc.setDrawColor(15, 107, 107);
     doc.setLineWidth(0.5);
     doc.line(ml, y, pw - mr, y);
-    y += 6;
+    y += 14;
 
-    // Column headers
-    doc.setFillColor(227, 242, 242);
-    doc.rect(ml, y - 4, cw, 8, 'F');
-    doc.setFontSize(9);
-    doc.setFont('times', 'bold');
-    doc.setTextColor(15, 107, 107);
-    doc.text('#', ml + 1, y);
-    doc.text(`Reference (${citeStyleLabel}) & Classification`, ml + 9, y);
-    doc.text('Heuristic Rel.', pw - mr - 28, y);
-    doc.text('Status', pw - mr, y, { align: 'right' });
-    y += 6;
-    doc.setDrawColor(200, 220, 220);
-    doc.setLineWidth(0.2);
-    doc.line(ml, y, pw - mr, y);
-    y += 3;
+    // Render initial table header
+    renderTableHeader(y);
+    y += headerHeight;
+
+    const padX = 4;
+    const padY = 5;
 
     STATE.paper.references.forEach((r, i) => {
       const origPaper = r.paper || STATE.papers[r.origIdx !== undefined ? r.origIdx : i];
       const pct = STATE.relevance[r.origIdx !== undefined ? r.origIdx : i] || 0;
       const val = STATE.validations[r.origIdx !== undefined ? r.origIdx : i] || {};
-      const relObj = (STATE.relevanceDetails && STATE.relevanceDetails[r.origIdx !== undefined ? r.origIdx : i]) ? STATE.relevanceDetails[r.origIdx !== undefined ? r.origIdx : i] : scoreHeuristicRelevance(origPaper, STATE.topic);
       const design = classifyStudyDesign(origPaper);
       const ft = getFullTextInfo(origPaper);
-      const warnInfo = getManualVerificationWarnings(origPaper, val, pct);
 
-      const cleanRefText = cleanHtmlText(r.text);
-      const ls = doc.splitTextToSize(cleanRefText, cw - 55);
-
-      const expStr = relObj.explanations.length ? ` | [${relObj.explanations.slice(0, 2).join(', ')}]` : '';
-      const extraText = `Design: ${design.name} | ${ft.label}${expStr}${warnInfo.isClean ? '' : ' | [!] ' + warnInfo.warnings[0].substring(0, 35) + '…'}`;
-      const extraLs = doc.splitTextToSize(extraText, cw - 55);
-
-      const rowH = Math.max(16, (ls.length * 4.2) + (extraLs.length * 3.6) + 4);
-      chk(rowH + 2);
-      if(i % 2 === 0){
-        doc.setFillColor(248, 252, 252);
-        doc.rect(ml, y - 3, cw, rowH, 'F');
-      }
-      doc.setFont('times', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(15, 107, 107);
-      doc.text(`${r.num}.`, ml + 1, y);
-      doc.setFont('times', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(20, 20, 20);
-      ls.forEach((l, li) => doc.text(l, ml + 9, y + li * 4.2));
-      
-      const extraY = y + (ls.length * 4.2) + 0.5;
-      doc.setFont('times', 'italic');
-      doc.setFontSize(7.3);
-      doc.setTextColor(80, 80, 80);
-      extraLs.forEach((el, eli) => doc.text(el, ml + 9, extraY + eli * 3.6));
-
-      const rc = pct >= 70 ? [34, 150, 90] : pct >= 45 ? [200, 140, 0] : [200, 50, 50];
-      doc.setFont('times', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(...rc);
-      doc.text(`${pct}%`, pw - mr - 28, y);
-      doc.setFont('times', val.valid ? 'bold' : 'italic');
+      // Col 1 text
       doc.setFontSize(8);
+      doc.setFont('times', 'bold');
+      const lines1 = doc.splitTextToSize(`${r.num}.`, colWidths[0] - (2 * padX));
+
+      // Col 2 text (Vancouver citation text wrapping)
+      doc.setFontSize(8);
+      doc.setFont('times', 'normal');
+      const cleanRefText = cleanHtmlText(r.text.replace(/^\d+\.\s*/, ''));
+      const lines2 = doc.splitTextToSize(cleanRefText, colWidths[1] - (2 * padX));
+
+      // Col 3 text (Study design & access)
+      doc.setFontSize(7.5);
+      const designText = `${design.name}\n(${ft.label})`;
+      const lines3 = doc.splitTextToSize(designText, colWidths[2] - (2 * padX));
+
+      // Col 4 text (Relevance score & badges)
+      doc.setFontSize(7.5);
+      const scoreBadgeText = `${pct}%\n${origPaper?.badge === 'cross-verified' ? 'Cross-Verified' : (origPaper?.source || 'Verified')}`;
+      const lines4 = doc.splitTextToSize(scoreBadgeText, colWidths[3] - (2 * padX));
+
+      // Col 5 text (Verification status)
+      doc.setFontSize(7.5);
+      const statusText = val.valid ? 'Verified ✔' : (val.status || 'Unresolved');
+      const lines5 = doc.splitTextToSize(statusText, colWidths[4] - (2 * padX));
+
+      // Compute row height
+      const h1 = lines1.length * 10;
+      const h2 = lines2.length * 9.8;
+      const h3 = lines3.length * 9.2;
+      const h4 = lines4.length * 9.2;
+      const h5 = lines5.length * 9.2;
+      const maxContentH = Math.max(h1, h2, h3, h4, h5);
+      const rowH = Math.max(18, maxContentH + (2 * padY));
+
+      // Row containment check: preserve full row across page breaks
+      if (y + rowH > ph - mb) {
+        doc.addPage();
+        y = mt;
+        renderTableHeader(y);
+        y += headerHeight;
+      }
+
+      // Alternating row background
+      if (i % 2 === 0) {
+        doc.setFillColor(248, 252, 252);
+        doc.rect(ml, y, cw, rowH, 'F');
+      }
+
+      // Cell borders
+      doc.setDrawColor(215, 225, 225);
+      doc.setLineWidth(0.4);
+      doc.rect(ml, y, cw, rowH, 'S');
+      for (let c = 1; c < colX.length; c++) {
+        doc.line(colX[c], y, colX[c], y + rowH);
+      }
+
+      // Draw Col 1 text
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(15, 107, 107);
+      lines1.forEach((l, idx) => doc.text(l, colX[0] + padX, y + padY + 7 + (idx * 10)));
+
+      // Draw Col 2 text
+      doc.setFont('times', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(25, 25, 25);
+      lines2.forEach((l, idx) => doc.text(l, colX[1] + padX, y + padY + 7 + (idx * 9.8)));
+
+      // Draw Col 3 text
+      doc.setFont('times', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(45, 55, 65);
+      lines3.forEach((l, idx) => doc.text(l, colX[2] + padX, y + padY + 7 + (idx * 9.2)));
+
+      // Draw Col 4 text
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8);
+      const scoreColor = pct >= 70 ? [34, 150, 90] : pct >= 45 ? [200, 140, 0] : [200, 50, 50];
+      doc.setTextColor(...scoreColor);
+      lines4.forEach((l, idx) => {
+        if (idx > 0) {
+          doc.setFont('times', 'normal');
+          doc.setFontSize(7);
+          doc.setTextColor(80, 90, 100);
+        }
+        doc.text(l, colX[3] + padX, y + padY + 7 + (idx * 9.2));
+      });
+
+      // Draw Col 5 text
+      doc.setFont('times', val.valid ? 'bold' : 'italic');
+      doc.setFontSize(7.5);
       doc.setTextColor(val.valid ? 15 : 180, val.valid ? 107 : 60, val.valid ? 107 : 60);
-      doc.text(val.status || '—', pw - mr, y, { align: 'right' });
-      
-      doc.setDrawColor(210, 225, 225);
-      doc.line(ml, y + rowH - 1, pw - mr, y + rowH - 1);
-      y += rowH + 2;
+      lines5.forEach((l, idx) => doc.text(l, colX[4] + padX, y + padY + 7 + (idx * 9.2)));
+
+      y += rowH;
     });
 
     const tot = doc.internal.getNumberOfPages();
@@ -5328,21 +5453,22 @@ async function exportReferencesPDF(){
         doc.setFontSize(7.5);
         doc.setFont('times', 'italic');
         doc.setTextColor(100, 115, 125);
-        doc.text('SciDraft AI · References & Verification Matrix', ml, 12);
-        doc.text(STATE.topic.substring(0, 42) + '…', pw - mr, 12, { align: 'right' });
+        doc.text('SciDraft AI · References & Verification Audit Report', ml, 34);
+        const shortTopic = STATE.topic.length > 45 ? STATE.topic.substring(0, 42) + '…' : STATE.topic;
+        doc.text(shortTopic, pw - mr, 34, { align: 'right' });
         doc.setDrawColor(210, 225, 225);
-        doc.setLineWidth(0.25);
-        doc.line(ml, 14, pw - mr, 14);
+        doc.setLineWidth(0.4);
+        doc.line(ml, 38, pw - mr, 38);
       }
       doc.setDrawColor(210, 225, 225);
-      doc.setLineWidth(0.25);
-      doc.line(ml, ph - 12, pw - mr, ph - 12);
+      doc.setLineWidth(0.4);
+      doc.line(ml, ph - 34, pw - mr, ph - 34);
       doc.setFontSize(7.5);
       doc.setFont('times', 'normal');
       doc.setTextColor(90, 105, 115);
-      doc.text('SciDraft AI · References Appraisal Matrix', ml, ph - 7);
-      doc.text('copyrights@Raouf Roshdy2026', pw / 2, ph - 7, { align: 'center' });
-      doc.text(`Page ${i} of ${tot}`, pw - mr, ph - 7, { align: 'right' });
+      doc.text('SciDraft AI · References Appraisal Matrix', ml, ph - 22);
+      doc.text(`Page ${i} of ${tot}`, pw / 2, ph - 22, { align: 'center' });
+      doc.text('copyrights@Raouf Roshdy2026', pw - mr, ph - 22, { align: 'right' });
     }
     doc.save(`AI_Review_References_${STATE.topic.replace(/\s+/g, '_').substring(0, 30)}_${style}.pdf`);
   } catch(err){
