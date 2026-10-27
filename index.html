@@ -5624,6 +5624,15 @@ async function exportReferencesPDF(){
 
     const padX = 4;
     const padY = 5;
+    const descenderSafety = 6; // Safety margin of at least 6pt per cell to accommodate descending letters (g, j, p, q, y)
+
+    // Soft word-break helper for DOIs, URLs, and long unbroken sequences in table cells:
+    const wrapLongStringForPdf = (str) => {
+      if (!str || typeof str !== 'string') return '';
+      return str.replace(/\S{16,}/g, (match) => {
+        return match.replace(/([/\-])(?=[^\s])/g, '$1 ');
+      });
+    };
 
     STATE.paper.references.forEach((r, i) => {
       const origPaper = r.paper || STATE.papers[r.origIdx !== undefined ? r.origIdx : i];
@@ -5637,35 +5646,39 @@ async function exportReferencesPDF(){
       doc.setFont('times', 'bold');
       const lines1 = doc.splitTextToSize(`${r.num}.`, colWidths[0] - (2 * padX));
 
-      // Col 2 text (Vancouver citation text wrapping)
+      // Col 2 text (Vancouver citation text wrapping with soft breaks for long DOIs and URLs)
       doc.setFontSize(8);
       doc.setFont('times', 'normal');
-      const cleanRefText = cleanHtmlText(r.text.replace(/^\d+\.\s*/, ''));
+      const cleanRefText = wrapLongStringForPdf(cleanHtmlText(r.text.replace(/^\d+\.\s*/, '')));
       const lines2 = doc.splitTextToSize(cleanRefText, colWidths[1] - (2 * padX));
 
       // Col 3 text (Study design & access)
       doc.setFontSize(7.5);
-      const designText = `${design.name}\n(${ft.label})`;
+      const designText = wrapLongStringForPdf(`${design.name}\n(${ft.label})`);
       const lines3 = doc.splitTextToSize(designText, colWidths[2] - (2 * padX));
 
       // Col 4 text (Relevance score & badges)
       doc.setFontSize(7.5);
-      const scoreBadgeText = `${pct}%\n${origPaper?.badge === 'cross-verified' ? 'Cross-Verified' : (origPaper?.source || 'Verified')}`;
+      const scoreBadgeText = wrapLongStringForPdf(`${pct}%\n${origPaper?.badge === 'cross-verified' ? 'Cross-Verified' : (origPaper?.source || 'Verified')}`);
       const lines4 = doc.splitTextToSize(scoreBadgeText, colWidths[3] - (2 * padX));
 
       // Col 5 text (Verification status)
       doc.setFontSize(7.5);
-      const statusText = val.valid ? 'Verified ✔' : (val.status || 'Unresolved');
+      const statusText = wrapLongStringForPdf(val.valid ? 'Verified ✔' : (val.status || 'Unresolved'));
       const lines5 = doc.splitTextToSize(statusText, colWidths[4] - (2 * padX));
 
-      // Compute row height
-      const h1 = lines1.length * 10;
-      const h2 = lines2.length * 9.8;
-      const h3 = lines3.length * 9.2;
-      const h4 = lines4.length * 9.2;
-      const h5 = lines5.length * 9.2;
+      // Font metrics line heights (fontSize * 1.35)
+      const lh8 = 8 * 1.35;    // 10.8pt
+      const lh75 = 7.5 * 1.35; // 10.125pt
+
+      // Compute exact bounding box using font metrics: lineCount * (fontSize * 1.35) + 2 * padY + descenderSafety (>= 6pt)
+      const h1 = lines1.length * lh8;
+      const h2 = lines2.length * lh8;
+      const h3 = lines3.length * lh75;
+      const h4 = lines4.length * lh75;
+      const h5 = lines5.length * lh75;
       const maxContentH = Math.max(h1, h2, h3, h4, h5);
-      const rowH = Math.max(18, maxContentH + (2 * padY));
+      const rowH = Math.max(20, Math.ceil(maxContentH + (2 * padY) + descenderSafety));
 
       // Row containment check: preserve full row across page breaks
       if (y + rowH > ph - mb) {
@@ -5693,19 +5706,19 @@ async function exportReferencesPDF(){
       doc.setFont('times', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(15, 107, 107);
-      lines1.forEach((l, idx) => doc.text(l, colX[0] + padX, y + padY + 7 + (idx * 10)));
+      lines1.forEach((l, idx) => doc.text(l, colX[0] + padX, y + padY + 8 + (idx * lh8)));
 
       // Draw Col 2 text
       doc.setFont('times', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(25, 25, 25);
-      lines2.forEach((l, idx) => doc.text(l, colX[1] + padX, y + padY + 7 + (idx * 9.8)));
+      lines2.forEach((l, idx) => doc.text(l, colX[1] + padX, y + padY + 8 + (idx * lh8)));
 
       // Draw Col 3 text
       doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
       doc.setTextColor(45, 55, 65);
-      lines3.forEach((l, idx) => doc.text(l, colX[2] + padX, y + padY + 7 + (idx * 9.2)));
+      lines3.forEach((l, idx) => doc.text(l, colX[2] + padX, y + padY + 7.5 + (idx * lh75)));
 
       // Draw Col 4 text
       doc.setFont('times', 'bold');
@@ -5718,14 +5731,14 @@ async function exportReferencesPDF(){
           doc.setFontSize(7);
           doc.setTextColor(80, 90, 100);
         }
-        doc.text(l, colX[3] + padX, y + padY + 7 + (idx * 9.2));
+        doc.text(l, colX[3] + padX, y + padY + 7.5 + (idx * lh75));
       });
 
       // Draw Col 5 text
       doc.setFont('times', val.valid ? 'bold' : 'italic');
       doc.setFontSize(7.5);
       doc.setTextColor(val.valid ? 15 : 180, val.valid ? 107 : 60, val.valid ? 107 : 60);
-      lines5.forEach((l, idx) => doc.text(l, colX[4] + padX, y + padY + 7 + (idx * 9.2)));
+      lines5.forEach((l, idx) => doc.text(l, colX[4] + padX, y + padY + 7.5 + (idx * lh75)));
 
       y += rowH;
     });
