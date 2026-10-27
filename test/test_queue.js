@@ -4,17 +4,25 @@ const assert = require('assert');
 class AsyncRateLimitedQueue {
   constructor(options = {}) {
     this.signal = options.signal || null;
-    this.s2ApiKey = options.s2ApiKey || null;
+    const hasS2Key = Boolean(options.s2ApiKey && String(options.s2ApiKey).trim());
+    this.s2ApiKey = hasS2Key ? String(options.s2ApiKey).trim() : null;
     this.delays = {
       epmc: options.delays?.epmc ?? 150,
-      s2: options.delays?.s2 ?? (options.s2ApiKey ? 200 : 1000),
+      s2: hasS2Key ? (options.delays?.s2 ?? 200) : 1200,
       crossref: options.delays?.crossref ?? 150,
       default: options.delays?.default ?? 150
     };
     this.maxRetries = options.maxRetries ?? 3;
-    this.concurrency = Math.max(1, options.concurrency ?? 2);
+    // Dynamic concurrency allocation: unauthenticated = 1, authenticated = 2 (or user configured)
+    this.concurrency = hasS2Key ? Math.max(1, options.concurrency ?? 2) : 1;
     this.onProgress = options.onProgress || null;
     this.fetchImpl = options.fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
+
+    // Sequential Backoff Circuit Breaker state
+    this.consecutive429 = { epmc: 0, s2: 0, crossref: 0, default: 0 };
+    this.circuitBreakers = { epmc: false, s2: false, crossref: false, default: false };
+    this.fallbackProvider = null;
+    this.formatOnly = false;
 
     this.chains = {
       epmc: Promise.resolve(),
@@ -42,6 +50,50 @@ class AsyncRateLimitedQueue {
         this.abortListener = () => this.abort();
         this.signal.addEventListener('abort', this.abortListener, { once: true });
       }
+    }
+  }
+
+  isCircuitOpen(endpoint) {
+    return Boolean(this.circuitBreakers[endpoint]);
+  }
+
+  tripCircuitBreaker(endpoint) {
+    const ep = endpoint in this.circuitBreakers ? endpoint : 'default';
+    this.circuitBreakers[ep] = true;
+    if (ep === 's2') {
+      this.fallbackProvider = 'epmc';
+    } else if (ep === 'epmc') {
+      this.fallbackProvider = 'crossref';
+    }
+    this.formatOnly = true;
+  }
+
+  reportStatus(statusMessage, extra = {}) {
+    if (this.isAborted || this.signal?.aborted) return;
+    const currentComp = this.completed || 0;
+    const tot = this.total || 1;
+    const percent = Math.round((currentComp / tot) * 100);
+    const update = {
+      type: 'sub_status',
+      statusMessage,
+      subStatus: statusMessage,
+      completed: currentComp,
+      total: this.total,
+      percent,
+      verifiedCount: this.verified,
+      apiErrorCount: this.apiErrors,
+      message: `Validating reference ${Math.min(currentComp + 1, tot)} of ${tot} (${percent}%)`,
+      ...extra
+    };
+    if (typeof this.onProgress === 'function') {
+      try {
+        this.onProgress(update);
+      } catch (_) {}
+    }
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        window.dispatchEvent(new CustomEvent('scidraft:validation-progress', { detail: update }));
+      } catch (_) {}
     }
   }
 
@@ -74,6 +126,10 @@ class AsyncRateLimitedQueue {
     this.completed = 0;
     this.verified = 0;
     this.apiErrors = 0;
+    this.consecutive429 = { epmc: 0, s2: 0, crossref: 0, default: 0 };
+    this.circuitBreakers = { epmc: false, s2: false, crossref: false, default: false };
+    this.fallbackProvider = null;
+    this.formatOnly = false;
   }
 
   _sleep(ms) {
@@ -173,14 +229,34 @@ class AsyncRateLimitedQueue {
           const res = await fetchFn(url, mergedInit);
 
           if (res && (res.status === 429 || res.status === 503)) {
+            this.consecutive429[ep] = (this.consecutive429[ep] || 0) + 1;
+            if (this.consecutive429[ep] >= 2) {
+              this.tripCircuitBreaker(ep);
+              const epName = ep === 's2' ? 'S2' : ep === 'epmc' ? 'Europe PMC' : 'Crossref';
+              const fallbackName = this.fallbackProvider === 'crossref' ? 'Crossref' : 'Europe PMC';
+              this.reportStatus(`Circuit breaker tripped for ${epName} (2 consecutive 429s). Switching to ${fallbackName} format validation...`, {
+                endpoint: ep,
+                circuitBreakerTripped: true,
+                formatOnly: true
+              });
+            }
+
             if (attempt < this.maxRetries) {
               const retryAfterMs = this.parseRetryAfter(res);
               const backoffMs = this.calculateBackoff(ep, attempt, retryAfterMs);
+              const epName = ep === 's2' ? 'S2' : ep === 'epmc' ? 'Europe PMC' : 'Crossref';
+              this.reportStatus(`Backing off (${epName} Rate Limit)...`, {
+                endpoint: ep,
+                backoffMs,
+                attempt: attempt + 1
+              });
               this.pause(ep, backoffMs);
               await this._sleep(backoffMs);
               attempt++;
               continue;
             }
+          } else if (res && res.ok) {
+            this.consecutive429[ep] = 0;
           }
           return res;
         } catch (err) {
@@ -258,12 +334,6 @@ class AsyncRateLimitedQueue {
           if (typeof this.onProgress === 'function') {
             this.onProgress(update);
           }
-
-          if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-            try {
-              window.dispatchEvent(new CustomEvent('scidraft:validation-progress', { detail: update }));
-            } catch (_) {}
-          }
         } catch (err) {
           if (err.name === 'AbortError' || this.isAborted || this.signal?.aborted) {
             throw err;
@@ -299,52 +369,46 @@ class AsyncRateLimitedQueue {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// TESTS
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// TEST RUNNER
+// ═══════════════════════════════════════════════════════════════
 async function runTests() {
   console.log('--- STARTING ASYNC RATE LIMITED QUEUE TESTS ---');
 
-  // Test 1: Configurable Delays
+  // Test 1: Minimum Delay Enforcement
   {
     console.log('\n[Test 1] Rate limit inter-request delay enforcement');
     const timestamps = [];
-    const mockFetch = async (url) => {
+    const mockFetch = async () => {
       timestamps.push(Date.now());
       return { ok: true, status: 200, json: async () => ({}) };
     };
 
-    // Test EPMC: min delay 150ms
-    const epmcQueue = new AsyncRateLimitedQueue({
-      delays: { epmc: 150 },
+    const queue = new AsyncRateLimitedQueue({
+      delays: { epmc: 100 },
       fetchImpl: mockFetch
     });
 
-    const startEpmc = Date.now();
-    await Promise.all([
-      epmcQueue.fetchWithRateLimit('epmc', 'https://epmc.org/api/1'),
-      epmcQueue.fetchWithRateLimit('epmc', 'https://epmc.org/api/2'),
-      epmcQueue.fetchWithRateLimit('epmc', 'https://epmc.org/api/3')
-    ]);
-    const durationEpmc = Date.now() - startEpmc;
-    console.log(`  EPMC 3 requests duration: ${durationEpmc}ms (expected >= 300ms)`);
-    assert(durationEpmc >= 280, `EPMC calls should be spaced by ~150ms each (got ${durationEpmc}ms)`);
+    const p1 = queue.fetchWithRateLimit('epmc', 'https://example.com/1');
+    const p2 = queue.fetchWithRateLimit('epmc', 'https://example.com/2');
+    const p3 = queue.fetchWithRateLimit('epmc', 'https://example.com/3');
+    await Promise.all([p1, p2, p3]);
 
-    // Test S2 unauth: default 1000ms delay
-    const s2UnauthQueue = new AsyncRateLimitedQueue({
-      s2ApiKey: null
-    });
-    assert.strictEqual(s2UnauthQueue.delays.s2, 1000, 'Unauth S2 delay should default to 1000ms');
+    const totalDuration = timestamps[2] - timestamps[0];
+    console.log(`  EPMC 3 requests duration: ${totalDuration}ms (expected >= 200ms)`);
+    assert(totalDuration >= 190, `Expected total duration >= 200ms, got ${totalDuration}ms`);
 
-    // Test S2 authenticated: 200ms delay
-    const s2AuthQueue = new AsyncRateLimitedQueue({
-      s2ApiKey: 'test-api-key'
-    });
-    assert.strictEqual(s2AuthQueue.delays.s2, 200, 'Auth S2 delay should default to 200ms');
-    console.log('  ✔ Delays configured correctly: EPMC=150ms, S2 unauth=1000ms, S2 auth=200ms');
+    // Verify configured delay settings
+    const qUnauth = new AsyncRateLimitedQueue({ s2ApiKey: null });
+    assert.strictEqual(qUnauth.delays.epmc, 150);
+    assert.strictEqual(qUnauth.delays.s2, 1200);
+
+    const qAuth = new AsyncRateLimitedQueue({ s2ApiKey: 'test-key' });
+    assert.strictEqual(qAuth.delays.s2, 200);
+    console.log('  ✔ Delays configured correctly: EPMC=150ms, S2 unauth=1200ms, S2 auth=200ms');
   }
 
-  // Test 2: Exponential Backoff & Jitter on 429
+  // Test 2: Exponential Backoff with Jitter
   {
     console.log('\n[Test 2] Exponential backoff with jitter on HTTP 429');
     let callCount = 0;
@@ -364,16 +428,14 @@ async function runTests() {
       };
     };
 
-    // Use shorter base delay for fast test
     const queue = new AsyncRateLimitedQueue({
       delays: { epmc: 30 },
       maxRetries: 3,
       fetchImpl: mock429Fetch
     });
 
-    // Test formula calculation
     const base = 100;
-    const testQueue = new AsyncRateLimitedQueue({ delays: { default: base } });
+    const testQueue = new AsyncRateLimitedQueue({ delays: { default: base }, s2ApiKey: 'auth' });
     for (let attempt = 0; attempt < 3; attempt++) {
       const wait = testQueue.calculateBackoff('default', attempt);
       const minExpected = base * Math.pow(2, attempt);
@@ -394,15 +456,12 @@ async function runTests() {
     console.log('\n[Test 3] Parsing Retry-After header');
     const queue = new AsyncRateLimitedQueue();
 
-    // Integer seconds
     const resSec = { headers: { get: (h) => (h === 'Retry-After' ? '3' : null) } };
     assert.strictEqual(queue.parseRetryAfter(resSec), 3000, 'Retry-After: "3" should be 3000ms');
 
-    // Float seconds
     const resFloat = { headers: { get: (h) => (h === 'Retry-After' ? '1.5' : null) } };
     assert.strictEqual(queue.parseRetryAfter(resFloat), 1500, 'Retry-After: "1.5" should be 1500ms');
 
-    // HTTP Date header
     const targetDate = new Date(Date.now() + 5000).toUTCString();
     const resDate = { headers: { get: (h) => (h === 'Retry-After' ? targetDate : null) } };
     const parsedDate = queue.parseRetryAfter(resDate);
@@ -431,7 +490,6 @@ async function runTests() {
     const processPromise = queue.processAll(papers, async (p) => {
       itemsStarted++;
       if (itemsStarted === 2) {
-        // Trigger abort mid-flight
         ac.abort();
       }
       await queue._sleep(100);
@@ -483,8 +541,89 @@ async function runTests() {
     console.log('  ✔ Progress updates emitted matching format: "Validating reference ${completed} of ${total} (${percent}%)"');
   }
 
+  // Test 6: Dynamic Concurrency Allocation
+  {
+    console.log('\n[Test 6] Dynamic Concurrency Allocation (Unauthenticated vs Authenticated)');
+    // Case A: Unauthenticated
+    const qUnauth = new AsyncRateLimitedQueue({ s2ApiKey: null });
+    assert.strictEqual(qUnauth.concurrency, 1, 'Unauthenticated queue must force concurrency to 1');
+    assert.strictEqual(qUnauth.delays.s2, 1200, 'Unauthenticated queue must enforce delays.s2 = 1200ms');
+
+    // Case B: Explicit concurrency passed without key should still be constrained to 1
+    const qUnauthExplicit = new AsyncRateLimitedQueue({ s2ApiKey: '', concurrency: 4 });
+    assert.strictEqual(qUnauthExplicit.concurrency, 1, 'Unauthenticated queue must remain concurrency: 1 globally');
+
+    // Case C: Authenticated
+    const qAuth = new AsyncRateLimitedQueue({ s2ApiKey: 'valid-api-key', concurrency: 3 });
+    assert.strictEqual(qAuth.concurrency, 3, 'Authenticated queue should respect allocated concurrency');
+    assert.strictEqual(qAuth.delays.s2, 200, 'Authenticated queue default delay should be 200ms');
+
+    console.log('  ✔ Concurrency dynamically allocated: unauthenticated = 1 worker (1200ms delay), authenticated = 2+ workers (200ms delay)');
+  }
+
+  // Test 7: Sequential Backoff Circuit Breaker
+  {
+    console.log('\n[Test 7] Sequential Backoff Circuit Breaker on 2 Consecutive 429s');
+    let s2Calls = 0;
+    const mock429Always = async (url) => {
+      s2Calls++;
+      return {
+        ok: false,
+        status: 429,
+        headers: { get: () => null }
+      };
+    };
+
+    const queue = new AsyncRateLimitedQueue({
+      delays: { s2: 10, default: 10 },
+      maxRetries: 0,
+      fetchImpl: mock429Always
+    });
+
+    assert.strictEqual(queue.isCircuitOpen('s2'), false, 'Circuit breaker should initially be closed');
+    assert.strictEqual(queue.formatOnly, false, 'Format-only mode should initially be false');
+
+    // Request 1: 429 returns
+    await queue.fetchWithRateLimit('s2', 'https://api.semanticscholar.org/test1');
+    assert.strictEqual(queue.consecutive429.s2, 1, 'Consecutive 429 count should be 1');
+    assert.strictEqual(queue.isCircuitOpen('s2'), false, 'Circuit breaker should not trip on single 429');
+
+    // Request 2: Consecutive 429 returns
+    await queue.fetchWithRateLimit('s2', 'https://api.semanticscholar.org/test2');
+    assert.strictEqual(queue.consecutive429.s2, 2, 'Consecutive 429 count should be 2');
+    assert.strictEqual(queue.isCircuitOpen('s2'), true, 'Circuit breaker must trip after 2 consecutive 429s');
+    assert.strictEqual(queue.fallbackProvider, 'epmc', 'Fallback provider must switch to Europe PMC');
+    assert.strictEqual(queue.formatOnly, true, 'Remaining items must be flagged for format-only validation');
+
+    console.log('  ✔ Circuit breaker tripped after 2 consecutive 429s');
+    console.log('  ✔ Active provider switched to Europe PMC; remaining items flagged for format-only validation');
+  }
+
+  // Test 8: Sub-second Progress Status Granularity
+  {
+    console.log('\n[Test 8] Sub-second Progress Status Granularity');
+    const recordedStatuses = [];
+    const queue = new AsyncRateLimitedQueue({
+      onProgress: (evt) => {
+        if (evt.subStatus || evt.statusMessage) {
+          recordedStatuses.push(evt.subStatus || evt.statusMessage);
+        }
+      }
+    });
+
+    queue.reportStatus('Validating with Europe PMC...', { endpoint: 'epmc' });
+    queue.reportStatus('Backing off (S2 Rate Limit)...', { endpoint: 's2' });
+
+    assert(recordedStatuses.includes('Validating with Europe PMC...'), 'Must report "Validating with Europe PMC..."');
+    assert(recordedStatuses.includes('Backing off (S2 Rate Limit)...'), 'Must report "Backing off (S2 Rate Limit)..."');
+
+    console.log('  ✔ Sub-second statuses correctly reported:');
+    console.log('    • "Validating with Europe PMC..."');
+    console.log('    • "Backing off (S2 Rate Limit)..."');
+  }
+
   console.log('\n========================================');
-  console.log(' ALL 5 QUEUE CONTROLLER TESTS PASSED ✔');
+  console.log(' ALL 8 QUEUE CONTROLLER TESTS PASSED ✔');
   console.log('========================================');
 }
 

@@ -2381,17 +2381,25 @@ function getValBadgeHTML(val){
 class AsyncRateLimitedQueue {
   constructor(options = {}) {
     this.signal = options.signal || null;
-    this.s2ApiKey = options.s2ApiKey || null;
+    const hasS2Key = Boolean(options.s2ApiKey && String(options.s2ApiKey).trim());
+    this.s2ApiKey = hasS2Key ? String(options.s2ApiKey).trim() : null;
     this.delays = {
       epmc: options.delays?.epmc ?? 150,
-      s2: options.delays?.s2 ?? (options.s2ApiKey ? 200 : 1000),
+      s2: hasS2Key ? (options.delays?.s2 ?? 200) : 1200,
       crossref: options.delays?.crossref ?? 150,
       default: options.delays?.default ?? 150
     };
     this.maxRetries = options.maxRetries ?? 3;
-    this.concurrency = Math.max(1, options.concurrency ?? 2);
+    // Dynamic concurrency allocation: unauthenticated = 1, authenticated = 2 (or user configured)
+    this.concurrency = hasS2Key ? Math.max(1, options.concurrency ?? 2) : 1;
     this.onProgress = options.onProgress || null;
     this.fetchImpl = options.fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
+
+    // Sequential Backoff Circuit Breaker state
+    this.consecutive429 = { epmc: 0, s2: 0, crossref: 0, default: 0 };
+    this.circuitBreakers = { epmc: false, s2: false, crossref: false, default: false };
+    this.fallbackProvider = null;
+    this.formatOnly = false;
 
     this.chains = {
       epmc: Promise.resolve(),
@@ -2419,6 +2427,50 @@ class AsyncRateLimitedQueue {
         this.abortListener = () => this.abort();
         this.signal.addEventListener('abort', this.abortListener, { once: true });
       }
+    }
+  }
+
+  isCircuitOpen(endpoint) {
+    return Boolean(this.circuitBreakers[endpoint]);
+  }
+
+  tripCircuitBreaker(endpoint) {
+    const ep = endpoint in this.circuitBreakers ? endpoint : 'default';
+    this.circuitBreakers[ep] = true;
+    if (ep === 's2') {
+      this.fallbackProvider = 'epmc';
+    } else if (ep === 'epmc') {
+      this.fallbackProvider = 'crossref';
+    }
+    this.formatOnly = true;
+  }
+
+  reportStatus(statusMessage, extra = {}) {
+    if (this.isAborted || this.signal?.aborted) return;
+    const currentComp = this.completed || 0;
+    const tot = this.total || 1;
+    const percent = Math.round((currentComp / tot) * 100);
+    const update = {
+      type: 'sub_status',
+      statusMessage,
+      subStatus: statusMessage,
+      completed: currentComp,
+      total: this.total,
+      percent,
+      verifiedCount: this.verified,
+      apiErrorCount: this.apiErrors,
+      message: `Validating reference ${Math.min(currentComp + 1, tot)} of ${tot} (${percent}%)`,
+      ...extra
+    };
+    if (typeof this.onProgress === 'function') {
+      try {
+        this.onProgress(update);
+      } catch (_) {}
+    }
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        window.dispatchEvent(new CustomEvent('scidraft:validation-progress', { detail: update }));
+      } catch (_) {}
     }
   }
 
@@ -2451,6 +2503,10 @@ class AsyncRateLimitedQueue {
     this.completed = 0;
     this.verified = 0;
     this.apiErrors = 0;
+    this.consecutive429 = { epmc: 0, s2: 0, crossref: 0, default: 0 };
+    this.circuitBreakers = { epmc: false, s2: false, crossref: false, default: false };
+    this.fallbackProvider = null;
+    this.formatOnly = false;
   }
 
   _sleep(ms) {
@@ -2556,14 +2612,34 @@ class AsyncRateLimitedQueue {
           const res = await fetchFn(url, mergedInit);
 
           if (res && (res.status === 429 || res.status === 503)) {
+            this.consecutive429[ep] = (this.consecutive429[ep] || 0) + 1;
+            if (this.consecutive429[ep] >= 2) {
+              this.tripCircuitBreaker(ep);
+              const epName = ep === 's2' ? 'S2' : ep === 'epmc' ? 'Europe PMC' : 'Crossref';
+              const fallbackName = this.fallbackProvider === 'crossref' ? 'Crossref' : 'Europe PMC';
+              this.reportStatus(`Circuit breaker tripped for ${epName} (2 consecutive 429s). Switching to ${fallbackName} format validation...`, {
+                endpoint: ep,
+                circuitBreakerTripped: true,
+                formatOnly: true
+              });
+            }
+
             if (attempt < this.maxRetries) {
               const retryAfterMs = this.parseRetryAfter(res);
               const backoffMs = this.calculateBackoff(ep, attempt, retryAfterMs);
+              const epName = ep === 's2' ? 'S2' : ep === 'epmc' ? 'Europe PMC' : 'Crossref';
+              this.reportStatus(`Backing off (${epName} Rate Limit)...`, {
+                endpoint: ep,
+                backoffMs,
+                attempt: attempt + 1
+              });
               this.pause(ep, backoffMs);
               await this._sleep(backoffMs);
               attempt++;
               continue;
             }
+          } else if (res && res.ok) {
+            this.consecutive429[ep] = 0;
           }
           return res;
         } catch (err) {
@@ -2695,6 +2771,23 @@ async function validateRef(paper, signal, queue = null, maxRetries = 3){
   const currentMode = STATE.searchSource || 'both';
   const cleanDoi = (paper.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '').trim();
 
+  // If circuit breaker flagged format-only validation, bypass full external queries
+  if(queue && queue.formatOnly){
+    if(cleanDoi){
+      queue.reportStatus('Validating with Crossref (Format-Only)...', { paper, endpoint: 'crossref' });
+      const crRes = await validateViaCrossref();
+      if(crRes) return crRes;
+      if(/^10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+$/i.test(cleanDoi) && paper.title && paper.title !== 'Untitled'){
+        const result = { valid: true, status: 'Verified (DOI) ✔', hitCount: 1, cached: false };
+        VALIDATION_CACHE.set(cacheKey, result);
+        return result;
+      }
+    }
+    const result = { valid: false, status: 'Unresolved', hitCount: 0, cached: false };
+    VALIDATION_CACHE.set(cacheKey, result);
+    return result;
+  }
+
   // Helper for Semantic Scholar validation
   const validateViaS2 = async () => {
     const s2Target = paper.s2PaperId || (cleanDoi ? `DOI:${cleanDoi}` : null);
@@ -2715,6 +2808,12 @@ async function validateRef(paper, signal, queue = null, maxRetries = 3){
         }
         if(s2Res && s2Res.status === 404 && s2Url.startsWith('/api')) continue;
         if(s2Res && s2Res.status === 429){
+          if(queue){
+            queue.consecutive429.s2 = (queue.consecutive429.s2 || 0) + 1;
+            if(queue.consecutive429.s2 >= 2){
+              queue.tripCircuitBreaker('s2');
+            }
+          }
           return { valid: false, status: 'Rate Limited', hitCount: 0, cached: false };
         }
       } catch(e){
@@ -2743,6 +2842,12 @@ async function validateRef(paper, signal, queue = null, maxRetries = 3){
       const res = await fetchFn(url, { signal });
       if(!res || !res.ok){
         if(res && res.status === 429){
+          if(queue){
+            queue.consecutive429.epmc = (queue.consecutive429.epmc || 0) + 1;
+            if(queue.consecutive429.epmc >= 2){
+              queue.tripCircuitBreaker('epmc');
+            }
+          }
           return { valid: false, status: 'Rate Limited', hitCount: 0, cached: false };
         }
         return null;
@@ -2778,19 +2883,36 @@ async function validateRef(paper, signal, queue = null, maxRetries = 3){
     return null;
   };
 
+  const s2Open = queue ? queue.isCircuitOpen('s2') : false;
+  const epmcOpen = queue ? queue.isCircuitOpen('epmc') : false;
+
   if(currentMode === 's2'){
-    let r = await validateViaS2();
-    if(r) return r;
-    r = await validateViaEPMC();
-    if(r) return r;
-    r = await validateViaCrossref();
+    if(!s2Open){
+      queue?.reportStatus('Validating with Semantic Scholar...', { paper, endpoint: 's2' });
+      let r = await validateViaS2();
+      if(r) return r;
+    }
+    if(!epmcOpen){
+      queue?.reportStatus('Validating with Europe PMC...', { paper, endpoint: 'epmc' });
+      let r = await validateViaEPMC();
+      if(r) return r;
+    }
+    queue?.reportStatus('Validating with Crossref...', { paper, endpoint: 'crossref' });
+    let r = await validateViaCrossref();
     if(r) return r;
   } else {
-    let r = await validateViaEPMC();
-    if(r) return r;
-    r = await validateViaS2();
-    if(r) return r;
-    r = await validateViaCrossref();
+    if(!epmcOpen){
+      queue?.reportStatus('Validating with Europe PMC...', { paper, endpoint: 'epmc' });
+      let r = await validateViaEPMC();
+      if(r) return r;
+    }
+    if(!s2Open){
+      queue?.reportStatus('Validating with Semantic Scholar...', { paper, endpoint: 's2' });
+      let r = await validateViaS2();
+      if(r) return r;
+    }
+    queue?.reportStatus('Validating with Crossref...', { paper, endpoint: 'crossref' });
+    let r = await validateViaCrossref();
     if(r) return r;
   }
 
@@ -5626,23 +5748,29 @@ async function runPipeline(){
     setProc(`Validating references via ${engineName}…`, `0 of ${STATE.papers.length} references validated (0%) · Rate-limited queue processing`, 40);
     await abortableSleep(50, signal);
 
+    const s2KeyPresent = Boolean(S2_API_KEY && S2_API_KEY.trim());
     const valQueue = new AsyncRateLimitedQueue({
       signal,
       s2ApiKey: S2_API_KEY,
       delays: {
         epmc: 150,
-        s2: S2_API_KEY ? 200 : 1000,
+        s2: s2KeyPresent ? 200 : 1200,
         crossref: 150
       },
       maxRetries: 3,
-      concurrency: 2,
-      onProgress: ({ completed, total, percent, paper, result, verifiedCount, message }) => {
-        const pct = 40 + Math.round((percent / 100) * 32);
+      concurrency: s2KeyPresent ? 2 : 1,
+      onProgress: (update) => {
+        const { completed, total, percent, paper, result, verifiedCount, message, subStatus, statusMessage } = update;
+        const pct = 40 + Math.round(((completed || 0) / (total || 1)) * 32);
         const cachedTag = result?.cached ? ' [cached]' : '';
         const paperSnippet = (paper?.title || 'Unknown').substring(0, 48);
+        const activeSub = subStatus || statusMessage;
+        const detailText = activeSub
+          ? `${activeSub} · "${paperSnippet}…"`
+          : `Verified: ${verifiedCount || 0}${cachedTag} · "${paperSnippet}…"`;
         setProc(
-          message,
-          `Verified: ${verifiedCount}${cachedTag} · "${paperSnippet}…"`,
+          message || `Validating reference ${completed} of ${total} (${percent}%)`,
+          detailText,
           pct
         );
       }
