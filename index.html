@@ -3414,57 +3414,80 @@ function undoRemovePaper(){
 // CITATION FORMATTERS & AUTHOR PARSERS (Vancouver / APA / Harvard)
 // ═══════════════════════════════════════════════════════════════
 
+const COMPOUND_SURNAME_PREFIXES = new Set(['van', 'von', 'de', 'der', 'di', 'al-', 'el-', 'da', 'del', 'della', 'du', 'la', 'le', 'ter', 'ten']);
+
 /**
  * Standardize single author name to: "Surname Initials" without internal periods.
- * Examples: "Roshdy R", "Smith JA", "O'Connor MJ"
+ * Supports compound surnames (e.g., "van", "von", "de", "der", "di", "al-", "el-")
+ * and hyphenated surnames (e.g., "Gomez-Sanchez E").
+ * Examples: "Roshdy R", "Smith JA", "Gomez-Sanchez E", "van Rossum G", "al-Khatib A"
  */
 function normalizeAuthorName(raw) {
   if (!raw) return '';
   let s = cleanHtmlText(String(raw)).trim();
   s = s.replace(/\s+/g, ' ');
 
-  // If already formatted like "Surname Initials" (e.g., "Roshdy R", "Smith JA")
-  const mAlready = s.match(/^([A-Za-zÀ-ÿ\-']+(?:\s+[a-z]{1,4}\b)*)\s+([A-Z]{1,4})\.?$/);
+  // If already formatted like "Surname Initials" (e.g., "Gomez-Sanchez E", "van Rossum G", "Smith JA")
+  const mAlready = s.match(/^((?:(?:van|von|de|der|di|al-|el-|da|del|della|du|la|le|ter|ten)\s+)*[A-Za-zÀ-ÿ]+(?:-[A-Za-zÀ-ÿ]+)?)\s+([A-Z]{1,4})\.?$/i);
   if (mAlready) {
     return `${mAlready[1]} ${mAlready[2].replace(/\./g, '')}`;
   }
 
-  // If "Surname, Firstname Middlename" or "Surname, Initials"
+  // If "Surname, Firstname Middlename" or "Surname, Initials" (e.g., "Gomez-Sanchez, Eduardo")
   if (s.includes(',')) {
     const parts = s.split(',').map(p => p.trim());
     const surname = parts[0];
     const given = parts.slice(1).join(' ').trim();
     if (!given) return surname;
     const initials = given
-      .replace(/[^A-Za-zÀ-ÿ\s]/g, '')
-      .split(/\s+/)
+      .replace(/[^A-Za-zÀ-ÿ\s-]/g, '')
+      .split(/[\s-]+/)
       .filter(Boolean)
       .map(w => w[0].toUpperCase())
       .join('');
     return `${surname} ${initials}`.trim();
   }
 
-  // If "Firstname [Middlename] Surname"
+  // Whitespace-separated tokens
   const tokens = s.split(/\s+/).filter(Boolean);
   if (tokens.length === 1) {
     return tokens[0];
   }
 
-  // Check if last token is already uppercase initials (e.g. "Smith J.A.")
+  // Check if last token is already uppercase initials (e.g. "Smith J.A." or "Gomez-Sanchez E")
   const lastClean = tokens[tokens.length - 1].replace(/\./g, '');
   if (/^[A-Z]{1,4}$/.test(lastClean)) {
     const surname = tokens.slice(0, -1).join(' ');
     return `${surname} ${lastClean}`;
   }
 
-  // Standard: "Firstname Middlename Surname" -> Surname = last token, initials = preceding tokens
-  const surname = tokens[tokens.length - 1];
-  const givenTokens = tokens.slice(0, -1);
+  // Scan right-to-left for compound surname with prefixes (e.g., "Guido van Rossum", "Maria de la Cruz", "Eduardo Gomez-Sanchez")
+  let surnameTokens = [tokens[tokens.length - 1]];
+  let idx = tokens.length - 2;
+  while (idx >= 0) {
+    const lower = tokens[idx].toLowerCase();
+    if (COMPOUND_SURNAME_PREFIXES.has(lower) || lower.endsWith('-')) {
+      surnameTokens.unshift(tokens[idx]);
+      idx--;
+    } else {
+      break;
+    }
+  }
+
+  // Remaining tokens are given names
+  const givenTokens = tokens.slice(0, idx + 1);
+  const surname = surnameTokens.join(' ');
+
+  if (givenTokens.length === 0) {
+    return surname;
+  }
+
   const initials = givenTokens
     .map(t => t.replace(/[^A-Za-zÀ-ÿ]/g, ''))
     .filter(Boolean)
     .map(w => w[0].toUpperCase())
     .join('');
+
   return `${surname} ${initials}`.trim();
 }
 
@@ -3766,17 +3789,64 @@ function formatInTextCitation(indices, style = STATE.citationStyle || 'vancouver
   }
 }
 
+/**
+ * Enforces ICMJE / NLM Vancouver typographical placement rules:
+ * - Superscript citation numbers must sit immediately outside closing punctuation.
+ * - Repositions citations that appear before trailing periods or commas.
+ * - Strips any whitespace between punctuation and subsequent superscripts.
+ */
+function repositionVancouverCitations(text) {
+  if (!text || typeof text !== 'string') return '';
+  let s = text;
+
+  // 1. Collapse multiple adjacent bracket citations: e.g. [1] [2] or [1],[2] -> [1,2]
+  s = s.replace(/\[(\d+(?:,\s*\d+)*)\]\s*,?\s*\[(\d+(?:,\s*\d+)*)\]/g, '[$1,$2]');
+
+  // 2. Reposition bracket citations before punctuation to immediately outside:
+  // e.g. 'trials [1,2].' -> 'trials.[1,2]'
+  // e.g. 'trials [1,2],' -> 'trials,[1,2]'
+  // e.g. 'trials [1,2];' -> 'trials;[1,2]'
+  // e.g. 'trials [1,2]:' -> 'trials:[1,2]'
+  s = s.replace(/\s*\[(\d+(?:,\s*\d+)*)\]\s*([.,;:])/g, '$2[$1]');
+
+  // 3. Remove whitespace between punctuation and bracket citation:
+  // e.g. 'trials. [1,2]' -> 'trials.[1,2]'
+  // e.g. 'trials, [1,2]' -> 'trials,[1,2]'
+  s = s.replace(/([.,;:])\s+\[(\d+(?:,\s*\d+)*)\]/g, '$1[$2]');
+
+  // 4. Eliminate accidental duplicate punctuation around bracket citations:
+  // e.g. 'trials.[1,2].' -> 'trials.[1,2]'
+  s = s.replace(/([.,;:])\[(\d+(?:,\s*\d+)*)\]\s*\1/g, '$1[$2]');
+
+  // 5. HTML superscript repositioning:
+  // e.g. 'trials <sup class="cite-num">1,2</sup>.' -> 'trials.<sup class="cite-num">1,2</sup>'
+  s = s.replace(/\s*(<sup\b[^>]*>[\d,]+<\/sup>)\s*([.,;:])/gi, '$2$1');
+  s = s.replace(/([.,;:])\s+(<sup\b[^>]*>[\d,]+<\/sup>)/gi, '$1$2');
+  s = s.replace(/([.,;:])(<sup\b[^>]*>[\d,]+<\/sup>)\s*\1/gi, '$1$2');
+
+  // 6. Raw numbers before trailing punctuation:
+  // e.g. 'as reported in previous trials 1,2.' -> 'as reported in previous trials.1,2'
+  s = s.replace(/([a-zA-ZÀ-ÿ\)])\s+(\d+(?:,\d+)*)\s*([.,;:])/g, '$1$3$2');
+
+  // 7. Raw numbers with space after punctuation:
+  // e.g. 'as reported in previous trials. 1,2' -> 'as reported in previous trials.1,2'
+  s = s.replace(/([.,;:])\s+(\d+(?:,\d+)*)(\s+[A-Z]|\s*$)/g, '$1$2$3');
+
+  return s;
+}
+
 function parseParagraphTokens(paraText, citationStyle = STATE.citationStyle || 'vancouver', papers = STATE.papers) {
+  const sourceText = citationStyle === 'vancouver' ? repositionVancouverCitations(paraText) : paraText;
   const regex = /\[(\d+(?:,\s*\d+)*)\]/g;
   const tokens = [];
   let lastIndex = 0;
   let match;
 
-  while ((match = regex.exec(paraText)) !== null) {
+  while ((match = regex.exec(sourceText)) !== null) {
     if (match.index > lastIndex) {
       tokens.push({
         type: 'text',
-        text: paraText.substring(lastIndex, match.index)
+        text: sourceText.substring(lastIndex, match.index)
       });
     }
     const rawNums = match[1].split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
@@ -3794,10 +3864,10 @@ function parseParagraphTokens(paraText, citationStyle = STATE.citationStyle || '
     lastIndex = regex.lastIndex;
   }
 
-  if (lastIndex < paraText.length) {
+  if (lastIndex < sourceText.length) {
     tokens.push({
       type: 'text',
-      text: paraText.substring(lastIndex)
+      text: sourceText.substring(lastIndex)
     });
   }
 
@@ -4162,6 +4232,27 @@ class PaperGenerator {
       references:  this.generateReferences()
     };
 
+    // Apply Vancouver Punctuation Repositioning pass across all section texts
+    const sanitizeSectionPunctuation = (sec) => {
+      if (!sec) return '';
+      if (typeof sec === 'string') return repositionVancouverCitations(sec);
+      if (typeof sec === 'object') {
+        const res = {};
+        for (const [k, v] of Object.entries(sec)) {
+          res[k] = repositionVancouverCitations(v);
+        }
+        return res;
+      }
+      return sec;
+    };
+
+    rawDraft.intro = sanitizeSectionPunctuation(rawDraft.intro);
+    rawDraft.methods = sanitizeSectionPunctuation(rawDraft.methods);
+    rawDraft.results = sanitizeSectionPunctuation(rawDraft.results);
+    rawDraft.discussion = sanitizeSectionPunctuation(rawDraft.discussion);
+    rawDraft.conclusion = sanitizeSectionPunctuation(rawDraft.conclusion);
+    rawDraft.abstractObj = sanitizeSectionPunctuation(rawDraft.abstractObj);
+
     // Apply 3-Pass In-Text Numbering Engine for deterministic ICMJE/NLM Vancouver sequence
     const proc = InTextNumberingEngine.process(rawDraft, this.papers);
     const finalDraft = proc.updatedManuscript;
@@ -4409,7 +4500,11 @@ function renderPaperPreview(paper){
   const style = STATE.citationStyle || 'vancouver';
 
   const citify = t => {
-    return String(t || '').replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
+    let raw = String(t || '');
+    if (style === 'vancouver') {
+      raw = repositionVancouverCitations(raw);
+    }
+    let formatted = raw.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
       const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
       const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
       const firstNum = parts[0] || '1';
@@ -4427,6 +4522,11 @@ function renderPaperPreview(paper){
         return `<sup class="cite-num" title="Vancouver Reference: ${cleanNums} · Click to jump to bibliography" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${cleanNums}</sup>`;
       }
     });
+
+    if (style === 'vancouver') {
+      formatted = repositionVancouverCitations(formatted);
+    }
+    return formatted;
   };
 
   const sectionHTML = (num, heading, text) => {
