@@ -1558,10 +1558,44 @@ function cleanQueryKeywords(topic){
     .trim();
 }
 
+/**
+ * Helper escapeLuceneQuery(term) that escapes special Lucene characters:
+ * + - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
+ */
+function escapeLuceneQuery(term) {
+  if (!term || typeof term !== 'string') return '';
+  let s = term.replace(/[\x00-\x1f\x7f]/g, ' ');
+  s = s.replace(/\\/g, '\\\\');
+  s = s.replace(/([+\-!(){}\[\]^"~*?:/]|&&|\|\|)/g, '\\$1');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Sanitizes inner title string specifically for Lucene TITLE:"..." queries:
+ * - Sanitizes inner double quotes and colons
+ * - Limits fallback title queries to 60 characters, trimmed cleanly at word boundaries
+ */
+function sanitizeTitleForLucene(title, maxLen = 60) {
+  if (!title || typeof title !== 'string') return '';
+  let s = decodeHtmlEntities(title).replace(/<\/?[^>]+(>|$)/g, ' ');
+  s = s.replace(/["\\]/g, ' ').replace(/:/g, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+
+  if (s.length > maxLen) {
+    let truncated = s.substring(0, maxLen);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > 20) {
+      truncated = truncated.substring(0, lastSpace);
+    }
+    s = truncated.trim();
+  }
+  return s;
+}
+
 async function fetchEuropePMC(topic, pageSize, yearRange, signal){
   const currentYear = new Date().getFullYear();
   const buildUrl = (q) => {
-    let queryStr = q;
+    let queryStr = escapeLuceneQuery(q);
     if(yearRange < 99){
       const fromYear = currentYear - yearRange;
       queryStr += ` AND (FIRST_PDATE:[${fromYear}-01-01 TO ${currentYear}-12-31])`;
@@ -1569,9 +1603,10 @@ async function fetchEuropePMC(topic, pageSize, yearRange, signal){
     return `${EPMC}?query=${encodeURIComponent(queryStr)}&format=json&pageSize=${pageSize}&resultType=core`;
   };
 
-  const queries = [topic];
-  const cleaned = cleanQueryKeywords(topic);
-  if(cleaned && cleaned.toLowerCase() !== topic.toLowerCase()){
+  const sanitizedTopic = (topic || '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const queries = [sanitizedTopic];
+  const cleaned = cleanQueryKeywords(sanitizedTopic);
+  if(cleaned && cleaned.toLowerCase() !== sanitizedTopic.toLowerCase()){
     queries.push(cleaned);
   }
 
@@ -1682,9 +1717,10 @@ async function fetchSemanticScholar(topic, pageSize, yearRange, signal, apiKey){
   const currentYear = new Date().getFullYear();
   const fields = 'paperId,title,authors,year,abstract,venue,publicationVenue,journal,externalIds,openAccessPdf,citationCount,publicationTypes,fieldsOfStudy';
 
-  const queries = [topic];
-  const cleaned = cleanQueryKeywords(topic);
-  if(cleaned && cleaned.toLowerCase() !== topic.toLowerCase()){
+  const sanitizedTopic = (topic || '').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const queries = [sanitizedTopic];
+  const cleaned = cleanQueryKeywords(sanitizedTopic);
+  if(cleaned && cleaned.toLowerCase() !== sanitizedTopic.toLowerCase()){
     queries.push(cleaned);
   }
 
@@ -1855,21 +1891,41 @@ function decodeHtmlEntities(str){
 
 function canonicalTitleFingerprint(title){
   if(!title || typeof title !== 'string') return '';
-  // 1. Decode HTML entities first (handles &lt;i&gt;, &amp;, etc.)
+  // 1. Decode HTML entities first (handles &lt;i&gt;, &amp;, &quot;, etc.)
   let s = decodeHtmlEntities(title);
+
   // 2. Strip XML/HTML tags (both raw and decoded)
   s = s.replace(/<\/?[a-z0-9]+(?:\s+[^>]*)?>/gi, ' ');
-  // 3. Named Greek entity aliases
+
+  // 3. Unicode Normalization: NFKD decomposition
+  s = s.normalize('NFKD');
+
+  // 4. Strip zero-width characters (\u200B-\u200D, \uFEFF)
+  s = s.replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+  // 5. Replace non-breaking spaces (\u00A0, \u202F, \u2007, etc.) with standard space
+  s = s.replace(/[\u00A0\u202F\u2007\u2009\u200A]/g, ' ');
+
+  // 6. Convert typographic quotes to standard ASCII equivalents
+  s = s.replace(/[\u2018\u2019\u201A\u201B\u2032\u0060\u00B4]/g, "'");
+  s = s.replace(/[\u201C\u201D\u201E\u201F\u2033\u00AB\u00BB]/g, '"');
+
+  // 7. Convert typographic dashes and hyphens to standard ASCII space
+  s = s.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, ' ');
+
+  // 8. Named Greek entity aliases
   s = s.replace(/&(alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|micro|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega);/gi, (_, g) => {
     return g.toLowerCase() === 'micro' ? 'mu' : g.toLowerCase();
   });
-  // 4. Replace Greek letters with English names
+
+  // 9. Replace Greek letters with English names
   for(const [char, name] of Object.entries(GREEK_LETTER_MAP)){
     if(s.includes(char)){
       s = s.split(char).join(name);
     }
   }
-  // 5. Remove all non-alphanumeric characters except spaces, collapse multiple spaces to one, and lowercase
+
+  // 10. Remove all non-alphanumeric characters except spaces, collapse multiple spaces to one, and lowercase
   return s
     .toLowerCase()
     .replace(/[^a-z0-9 ]/g, ' ')
@@ -2670,9 +2726,15 @@ async function validateRef(paper, signal, queue = null, maxRetries = 3){
 
   // Helper for Europe PMC validation
   const validateViaEPMC = async () => {
-    let q = paper.pmid ? `EXT_ID:${paper.pmid} AND SRC:MED`
-          : cleanDoi    ? `DOI:"${cleanDoi}"`
-          : `TITLE:"${cleanHtmlText(paper.title).substring(0,50)}"`;
+    let q;
+    if(paper.pmid){
+      q = `EXT_ID:${paper.pmid} AND SRC:MED`;
+    } else if(cleanDoi){
+      q = `DOI:"${cleanDoi.replace(/["\\]/g, '')}"`;
+    } else {
+      const sanitizedTitle = sanitizeTitleForLucene(paper.title, 60);
+      q = `TITLE:"${sanitizedTitle}"`;
+    }
     const url = `${EPMC}?query=${encodeURIComponent(q)}&format=json&pageSize=1`;
 
     try {
