@@ -2319,7 +2319,318 @@ function getValBadgeHTML(val){
   return `<span class="validated-badge badge-notfound">${esc(val.status || 'Not Found')}</span>`;
 }
 
-async function validateRef(paper, signal, maxRetries = 2){
+// ═══════════════════════════════════════════════════════════════
+// RESILIENT ASYNC RATE-LIMITED QUEUE WORKER
+// ═══════════════════════════════════════════════════════════════
+class AsyncRateLimitedQueue {
+  constructor(options = {}) {
+    this.signal = options.signal || null;
+    this.s2ApiKey = options.s2ApiKey || null;
+    this.delays = {
+      epmc: options.delays?.epmc ?? 150,
+      s2: options.delays?.s2 ?? (options.s2ApiKey ? 200 : 1000),
+      crossref: options.delays?.crossref ?? 150,
+      default: options.delays?.default ?? 150
+    };
+    this.maxRetries = options.maxRetries ?? 3;
+    this.concurrency = Math.max(1, options.concurrency ?? 2);
+    this.onProgress = options.onProgress || null;
+    this.fetchImpl = options.fetchImpl || (typeof fetch !== 'undefined' ? fetch : null);
+
+    this.chains = {
+      epmc: Promise.resolve(),
+      s2: Promise.resolve(),
+      crossref: Promise.resolve(),
+      default: Promise.resolve()
+    };
+
+    this.lastDispatch = { epmc: 0, s2: 0, crossref: 0, default: 0 };
+    this.pausedUntil = { epmc: 0, s2: 0, crossref: 0, queue: 0, default: 0 };
+    this.activeTimers = new Set();
+    this.isAborted = false;
+
+    this.total = 0;
+    this.completed = 0;
+    this.verified = 0;
+    this.apiErrors = 0;
+
+    this.pendingQueue = [];
+
+    if (this.signal) {
+      if (this.signal.aborted) {
+        this.abort();
+      } else {
+        this.abortListener = () => this.abort();
+        this.signal.addEventListener('abort', this.abortListener, { once: true });
+      }
+    }
+  }
+
+  abort() {
+    this.isAborted = true;
+
+    for (const timer of this.activeTimers) {
+      clearTimeout(timer);
+    }
+    this.activeTimers.clear();
+
+    let abortErr;
+    if (typeof DOMException !== 'undefined') {
+      abortErr = new DOMException('Aborted', 'AbortError');
+    } else {
+      abortErr = new Error('Aborted');
+      abortErr.name = 'AbortError';
+    }
+
+    const pending = this.pendingQueue.splice(0, this.pendingQueue.length);
+    for (const item of pending) {
+      if (item && item.reject) item.reject(abortErr);
+    }
+
+    this.resetProgress();
+  }
+
+  resetProgress() {
+    this.total = 0;
+    this.completed = 0;
+    this.verified = 0;
+    this.apiErrors = 0;
+  }
+
+  _sleep(ms) {
+    if (ms <= 0) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      if (this.isAborted || this.signal?.aborted) {
+        const err = (typeof DOMException !== 'undefined')
+          ? new DOMException('Aborted', 'AbortError')
+          : new Error('Aborted');
+        err.name = 'AbortError';
+        return reject(err);
+      }
+      let timer = null;
+      const onAbort = () => {
+        if (timer) clearTimeout(timer);
+        this.activeTimers.delete(timer);
+        const err = (typeof DOMException !== 'undefined')
+          ? new DOMException('Aborted', 'AbortError')
+          : new Error('Aborted');
+        err.name = 'AbortError';
+        reject(err);
+      };
+      timer = setTimeout(() => {
+        this.activeTimers.delete(timer);
+        if (this.signal) this.signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, ms);
+      this.activeTimers.add(timer);
+      if (this.signal) {
+        this.signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  pause(endpoint, durationMs) {
+    const until = Date.now() + Math.max(0, durationMs);
+    if (endpoint && endpoint !== 'all') {
+      this.pausedUntil[endpoint] = Math.max(this.pausedUntil[endpoint] || 0, until);
+    } else {
+      this.pausedUntil.queue = Math.max(this.pausedUntil.queue || 0, until);
+    }
+  }
+
+  parseRetryAfter(res) {
+    if (!res || !res.headers) return null;
+    let headerVal = null;
+    if (typeof res.headers.get === 'function') {
+      headerVal = res.headers.get('Retry-After');
+    } else if (res.headers['retry-after']) {
+      headerVal = res.headers['retry-after'];
+    }
+    if (!headerVal) return null;
+
+    const seconds = parseFloat(headerVal);
+    if (!isNaN(seconds) && seconds >= 0) {
+      return Math.round(seconds * 1000);
+    }
+    const dateMs = Date.parse(headerVal);
+    if (!isNaN(dateMs)) {
+      return Math.max(0, dateMs - Date.now());
+    }
+    return null;
+  }
+
+  calculateBackoff(endpoint, attempt, retryAfterMs = null) {
+    if (retryAfterMs !== null && retryAfterMs > 0) {
+      return retryAfterMs;
+    }
+    const baseDelay = this.delays[endpoint] || this.delays.default || 150;
+    const jitter = Math.random() * 200;
+    return Math.round((baseDelay * Math.pow(2, attempt)) + jitter);
+  }
+
+  async fetchWithRateLimit(endpoint, url, init = {}) {
+    const ep = endpoint in this.chains ? endpoint : 'default';
+
+    const task = async () => {
+      let attempt = 0;
+      while (true) {
+        if (this.isAborted || this.signal?.aborted) {
+          const err = (typeof DOMException !== 'undefined')
+            ? new DOMException('Aborted', 'AbortError')
+            : new Error('Aborted');
+          err.name = 'AbortError';
+          throw err;
+        }
+
+        const now = Date.now();
+        const minDelay = this.delays[ep] ?? this.delays.default;
+        const last = this.lastDispatch[ep] || 0;
+        const pauseTime = Math.max(this.pausedUntil[ep] || 0, this.pausedUntil.queue || 0);
+        const earliest = Math.max(last + minDelay, pauseTime);
+        const waitBefore = earliest - now;
+        if (waitBefore > 0) {
+          await this._sleep(waitBefore);
+        }
+
+        this.lastDispatch[ep] = Date.now();
+
+        try {
+          const fetchFn = this.fetchImpl || fetch;
+          const mergedInit = { ...init, signal: this.signal || init.signal };
+          const res = await fetchFn(url, mergedInit);
+
+          if (res && (res.status === 429 || res.status === 503)) {
+            if (attempt < this.maxRetries) {
+              const retryAfterMs = this.parseRetryAfter(res);
+              const backoffMs = this.calculateBackoff(ep, attempt, retryAfterMs);
+              this.pause(ep, backoffMs);
+              await this._sleep(backoffMs);
+              attempt++;
+              continue;
+            }
+          }
+          return res;
+        } catch (err) {
+          if (err.name === 'AbortError' || this.isAborted || this.signal?.aborted) {
+            throw err;
+          }
+          if (attempt < this.maxRetries) {
+            const backoffMs = this.calculateBackoff(ep, attempt);
+            this.pause(ep, backoffMs);
+            await this._sleep(backoffMs);
+            attempt++;
+            continue;
+          }
+          throw err;
+        }
+      }
+    };
+
+    const nextPromise = this.chains[ep].then(task, task);
+    this.chains[ep] = nextPromise.catch(() => {});
+    return nextPromise;
+  }
+
+  async processAll(items, workerFn) {
+    if (this.isAborted || this.signal?.aborted) {
+      const err = (typeof DOMException !== 'undefined')
+        ? new DOMException('Aborted', 'AbortError')
+        : new Error('Aborted');
+      err.name = 'AbortError';
+      throw err;
+    }
+
+    this.total = items.length;
+    this.completed = 0;
+    this.verified = 0;
+    this.apiErrors = 0;
+
+    if (items.length === 0) return [];
+
+    const results = new Array(items.length);
+    this.pendingQueue = items.map((item, index) => ({ item, index }));
+
+    const runWorker = async () => {
+      while (this.pendingQueue.length > 0) {
+        if (this.isAborted || this.signal?.aborted) {
+          const err = (typeof DOMException !== 'undefined')
+            ? new DOMException('Aborted', 'AbortError')
+            : new Error('Aborted');
+          err.name = 'AbortError';
+          throw err;
+        }
+
+        const task = this.pendingQueue.shift();
+        if (!task) break;
+
+        const { item, index } = task;
+        try {
+          const res = await workerFn(item, index, this);
+          results[index] = res;
+
+          this.completed++;
+          if (res && res.valid) this.verified++;
+          if (res && (res.status === 'API Error' || res.status === 'Rate Limited' || res.status === 'Network Error')) {
+            this.apiErrors++;
+          }
+
+          const percent = Math.round((this.completed / this.total) * 100);
+          const update = {
+            completed: this.completed,
+            total: this.total,
+            percent,
+            paper: item,
+            result: res,
+            verifiedCount: this.verified,
+            apiErrorCount: this.apiErrors,
+            message: `Validating reference ${this.completed} of ${this.total} (${percent}%)`
+          };
+
+          if (typeof this.onProgress === 'function') {
+            this.onProgress(update);
+          }
+
+          if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            try {
+              window.dispatchEvent(new CustomEvent('scidraft:validation-progress', { detail: update }));
+            } catch (_) {}
+          }
+        } catch (err) {
+          if (err.name === 'AbortError' || this.isAborted || this.signal?.aborted) {
+            throw err;
+          }
+          const errResult = { valid: false, status: 'API Error', error: err.message, cached: false };
+          results[index] = errResult;
+          this.completed++;
+          this.apiErrors++;
+          const percent = Math.round((this.completed / this.total) * 100);
+          const update = {
+            completed: this.completed,
+            total: this.total,
+            percent,
+            paper: item,
+            result: errResult,
+            verifiedCount: this.verified,
+            apiErrorCount: this.apiErrors,
+            message: `Validating reference ${this.completed} of ${this.total} (${percent}%)`
+          };
+          if (typeof this.onProgress === 'function') this.onProgress(update);
+        }
+      }
+    };
+
+    const actualConcurrency = Math.min(this.concurrency, items.length);
+    const workers = [];
+    for (let c = 0; c < actualConcurrency; c++) {
+      workers.push(runWorker());
+    }
+
+    await Promise.all(workers);
+    return results;
+  }
+}
+
+async function validateRef(paper, signal, queue = null, maxRetries = 3){
   const cacheKey = getValidationCacheKey(paper);
   if(VALIDATION_CACHE.has(cacheKey)){
     return { ...VALIDATION_CACHE.get(cacheKey), cached: true };
@@ -2339,13 +2650,17 @@ async function validateRef(paper, signal, maxRetries = 2){
     for(const s2Url of s2Endpoints){
       try {
         const s2Headers = S2_API_KEY ? { 'x-api-key': S2_API_KEY } : {};
-        const s2Res = await fetch(s2Url, { headers: s2Headers, signal });
-        if(s2Res.ok){
+        const fetchFn = queue ? (u, opts) => queue.fetchWithRateLimit('s2', u, opts) : fetch;
+        const s2Res = await fetchFn(s2Url, { headers: s2Headers, signal });
+        if(s2Res && s2Res.ok){
           const result = { valid: true, status: 'Verified ✔', hitCount: 1, cached: false };
           VALIDATION_CACHE.set(cacheKey, result);
           return result;
         }
-        if(s2Res.status === 404 && s2Url.startsWith('/api')) continue;
+        if(s2Res && s2Res.status === 404 && s2Url.startsWith('/api')) continue;
+        if(s2Res && s2Res.status === 429){
+          return { valid: false, status: 'Rate Limited', hitCount: 0, cached: false };
+        }
       } catch(e){
         if(e.name === 'AbortError') throw e;
       }
@@ -2360,34 +2675,25 @@ async function validateRef(paper, signal, maxRetries = 2){
           : `TITLE:"${cleanHtmlText(paper.title).substring(0,50)}"`;
     const url = `${EPMC}?query=${encodeURIComponent(q)}&format=json&pageSize=1`;
 
-    for(let attempt = 0; attempt <= maxRetries; attempt++){
+    try {
       if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      try {
-        const res = await fetch(url, { signal });
-        if(!res.ok){
-          if((res.status === 429 || res.status >= 500) && attempt < maxRetries){
-            const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
-            await abortableSleep(backoffMs, signal);
-            continue;
-          }
-          break;
+      const fetchFn = queue ? (u, opts) => queue.fetchWithRateLimit('epmc', u, opts) : fetch;
+      const res = await fetchFn(url, { signal });
+      if(!res || !res.ok){
+        if(res && res.status === 429){
+          return { valid: false, status: 'Rate Limited', hitCount: 0, cached: false };
         }
-        const json = await res.json();
-        const found = (json.hitCount || 0) > 0;
-        if(found){
-          const result = { valid: true, status: 'Verified ✔', hitCount: json.hitCount || 0, cached: false };
-          VALIDATION_CACHE.set(cacheKey, result);
-          return result;
-        }
-        break;
-      } catch(err) {
-        if(err.name === 'AbortError') throw err;
-        if(attempt < maxRetries){
-          const backoffMs = Math.min(2500, Math.pow(2, attempt) * 400 + Math.random() * 200);
-          await abortableSleep(backoffMs, signal);
-          continue;
-        }
+        return null;
       }
+      const json = await res.json();
+      const found = (json.hitCount || 0) > 0;
+      if(found){
+        const result = { valid: true, status: 'Verified ✔', hitCount: json.hitCount || 0, cached: false };
+        VALIDATION_CACHE.set(cacheKey, result);
+        return result;
+      }
+    } catch(err) {
+      if(err.name === 'AbortError') throw err;
     }
     return null;
   };
@@ -2397,8 +2703,9 @@ async function validateRef(paper, signal, maxRetries = 2){
     if(!cleanDoi) return null;
     try {
       const crUrl = `https://api.crossref.org/works/${encodeURIComponent(cleanDoi)}`;
-      const crRes = await fetch(crUrl, { signal });
-      if(crRes.ok){
+      const fetchFn = queue ? (u, opts) => queue.fetchWithRateLimit('crossref', u, opts) : fetch;
+      const crRes = await fetchFn(crUrl, { signal });
+      if(crRes && crRes.ok){
         const result = { valid: true, status: 'Verified (Crossref) ✔', hitCount: 1, cached: false };
         VALIDATION_CACHE.set(cacheKey, result);
         return result;
@@ -4791,44 +5098,38 @@ async function runPipeline(){
     setProc(`Found ${hitCount} records${noteText} · Deduplicated (${dupCount} duplicate${dupCount===1?'':'s'} removed${mergeText}) · Balanced to target ${STATE.papers.length} papers in unified container${ratioText}…`, `Classifying study designs & evaluating full-text access for ${STATE.papers.length} papers`, 35);
     await abortableSleep(250, signal);
 
-    // ── Validate (Controlled Batches of 5 with Live Count & Abort Support) ──
-    setProc(`Validating references via ${engineName}…`, `0 of ${STATE.papers.length} references validated (0%) · Batched parallel processing`, 40);
+    // ── Validate (Resilient Async Rate-Limited Queue Worker) ──
+    setProc(`Validating references via ${engineName}…`, `0 of ${STATE.papers.length} references validated (0%) · Rate-limited queue processing`, 40);
     await abortableSleep(50, signal);
 
-    STATE.validations = new Array(STATE.papers.length);
-    let completedCount = 0;
-    let verifiedCount = 0;
-    let apiErrorCount = 0;
-    const BATCH_SIZE = 5;
-
-    for (let i = 0; i < STATE.papers.length; i += BATCH_SIZE) {
-      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-      const batch = STATE.papers.slice(i, i + BATCH_SIZE);
-
-      const batchPromises = batch.map(async (paper, bIdx) => {
-        const globalIdx = i + bIdx;
-        const v = await validateRef(paper, signal);
-        STATE.validations[globalIdx] = v;
-        completedCount++;
-        if (v.valid) verifiedCount++;
-        if (v.status === 'API Error' || v.status === 'Network Error' || v.status === 'Rate Limited') {
-          apiErrorCount++;
-        }
-        const pct = 40 + Math.round((completedCount / STATE.papers.length) * 32);
-        const cachedTag = v.cached ? ' [cached]' : '';
+    const valQueue = new AsyncRateLimitedQueue({
+      signal,
+      s2ApiKey: S2_API_KEY,
+      delays: {
+        epmc: 150,
+        s2: S2_API_KEY ? 200 : 1000,
+        crossref: 150
+      },
+      maxRetries: 3,
+      concurrency: 2,
+      onProgress: ({ completed, total, percent, paper, result, verifiedCount, message }) => {
+        const pct = 40 + Math.round((percent / 100) * 32);
+        const cachedTag = result?.cached ? ' [cached]' : '';
+        const paperSnippet = (paper?.title || 'Unknown').substring(0, 48);
         setProc(
-          `Validating references: ${completedCount} of ${STATE.papers.length} completed (${Math.round((completedCount / STATE.papers.length) * 100)}%)`,
-          `Batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(STATE.papers.length / BATCH_SIZE)} · Verified: ${verifiedCount}${cachedTag} · "${paper.title.substring(0, 48)}…"`,
+          message,
+          `Verified: ${verifiedCount}${cachedTag} · "${paperSnippet}…"`,
           pct
         );
-        return v;
-      });
-
-      await Promise.all(batchPromises);
-      if (i + BATCH_SIZE < STATE.papers.length) {
-        await abortableSleep(40, signal);
       }
-    }
+    });
+
+    STATE.validations = await valQueue.processAll(STATE.papers, async (paper, idx, q) => {
+      return await validateRef(paper, signal, q);
+    });
+
+    const verifiedCount = valQueue.verified;
+    const apiErrorCount = valQueue.apiErrors;
 
     setProc(`Validation complete: ${verifiedCount}/${STATE.papers.length} verified`, 'Computing relevance scores…', 72);
     await abortableSleep(150, signal);
