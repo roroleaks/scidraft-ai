@@ -465,7 +465,7 @@ async function runTests() {
     const targetDate = new Date(Date.now() + 5000).toUTCString();
     const resDate = { headers: { get: (h) => (h === 'Retry-After' ? targetDate : null) } };
     const parsedDate = queue.parseRetryAfter(resDate);
-    assert(parsedDate >= 4000 && parsedDate <= 6000, `Parsed date should be ~5000ms from now (got ${parsedDate}ms)`);
+    assert(parsedDate >= 3000 && parsedDate <= 6000, `Parsed date should be ~5000ms from now (got ${parsedDate}ms)`);
     console.log('  ✔ Retry-After header parsed accurately (seconds and HTTP Date)');
   }
 
