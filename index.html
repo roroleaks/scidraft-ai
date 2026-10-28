@@ -209,7 +209,106 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 .year-option, .paper-option, .engine-option { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
 .year-option:hover, .paper-option:hover, .engine-option:hover { border-color: var(--accent); background: var(--accent-light); }
 .year-option.selected, .paper-option.selected, .engine-option.selected { border-color: var(--accent); background: var(--accent-light); color: var(--accent); font-weight: 700; }
-.year-option input[type="radio"], .paper-option input[type="radio"], .engine-option input[type="radio"] { accent-color: var(--accent); }
+.year-option input[type="radio"], .paper-option input[type="radio"], .engine-option input[type="radio"], .engine-option input[type="checkbox"] { accent-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   INCLUDED / EXCLUDED PAPER CARD STATES & MODAL
+═══════════════════════════════════════════════════ */
+.paper-card.is-excluded {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  opacity: 0.72;
+  filter: grayscale(0.25);
+  transition: all .2s;
+}
+.paper-card.is-excluded:hover {
+  opacity: 0.95;
+  filter: none;
+}
+.btn-toggle-inc {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .78rem; font-weight: 700; padding: 5px 12px;
+  border-radius: 6px; cursor: pointer; transition: all .15s;
+  border: 1px solid transparent; font-family: inherit;
+}
+.btn-toggle-inc.inc-active {
+  background: #ecfdf5; color: #047857; border-color: #a7f3d0;
+}
+.btn-toggle-inc.inc-active:hover {
+  background: #fee2e2; color: #b91c1c; border-color: #fca5a5;
+}
+.btn-toggle-inc.inc-excluded {
+  background: #f1f5f9; color: #64748b; border-color: #cbd5e1;
+}
+.btn-toggle-inc.inc-excluded:hover {
+  background: #ecfdf5; color: #047857; border-color: #a7f3d0;
+}
+.btn-eval-paper {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .78rem; font-weight: 600; padding: 5px 12px;
+  border-radius: 6px; cursor: pointer; transition: all .15s;
+  background: #f0fdfa; color: var(--accent); border: 1px solid var(--accent);
+  font-family: inherit;
+}
+.btn-eval-paper:hover {
+  background: var(--accent); color: #fff;
+}
+
+/* Evaluation Modal */
+.eval-modal-backdrop {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+.eval-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  max-width: 820px;
+  width: 100%;
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.22);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.eval-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f8fafc;
+}
+.eval-modal-close {
+  background: none; border: none; font-size: 1.6rem; line-height: 1; cursor: pointer; color: var(--muted);
+}
+.eval-modal-close:hover { color: var(--ink); }
+.eval-modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+.eval-section {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.eval-section-title {
+  font-weight: 700;
+  font-size: .88rem;
+  color: var(--ink);
+  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.eval-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
 
 /* ═══════════════════════════════════════════════════
    ANIMATED PROCESSING INDICATOR  (AIMed-style SVG)
@@ -797,20 +896,56 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
     <input type="hidden" id="page-size" value="30"/>
 
     <!-- Search engine sources -->
-    <h2 class="sec-h" style="margin-top:18px">🌐 Literature Search Engines</h2>
-    <p class="hint">Select literature search databases (queries run concurrently and results are unified into a single deduplicated container):</p>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px" id="engine-options">
-      <label class="engine-option selected" onclick="selectSearchEngine(this,'both')">
-        <input type="radio" name="searchengine" value="both" checked>
-        <span>🌐 Dual Engine (Europe PMC + Semantic Scholar) <strong style="color:var(--accent);font-size:.78rem">Recommended ✓</strong></span>
+    <h2 class="sec-h" style="margin-top:18px">🌐 Literature Search Databases (Multi-Select)</h2>
+    <p class="hint">Select literature databases to query concurrently. All records are merged into a single deduplicated, cross-verified pool (select any or all 4):</p>
+    
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <button type="button" class="btn-source-action" onclick="selectAllSearchSources(true)" style="background:var(--accent-light);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:5px 14px;font-size:.8rem;font-weight:700;cursor:pointer">
+        ✨ Select All (4 Databases)
+      </button>
+      <button type="button" class="btn-source-action" onclick="selectAllSearchSources(false)" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:20px;padding:5px 14px;font-size:.8rem;font-weight:600;cursor:pointer">
+        🔄 Default (Europe PMC + Semantic Scholar)
+      </button>
+      <span id="source-selection-badge" style="font-size:.82rem;font-weight:600;color:var(--accent);margin-left:auto">
+        ✔ 4 of 4 Databases Active: Europe PMC + Semantic Scholar + Crossref + OpenAlex
+      </span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;margin-bottom:12px" id="engine-options">
+      <!-- Europe PMC -->
+      <label class="engine-option selected" id="source-opt-epmc" onclick="toggleSearchSource('epmc', this, event)" style="cursor:pointer;padding:12px 14px;border:2px solid var(--accent);border-radius:10px;background:#f0fdfa;display:flex;align-items:center;gap:10px;transition:all .2s">
+        <input type="checkbox" name="searchengine" value="epmc" checked style="accent-color:var(--accent);width:18px;height:18px;cursor:pointer">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--ink)">🇪🇺 Europe PMC</div>
+          <div style="font-size:.74rem;color:#64748B">EMBL-EBI Biomedical &amp; Life Sciences</div>
+        </div>
       </label>
-      <label class="engine-option" onclick="selectSearchEngine(this,'epmc')">
-        <input type="radio" name="searchengine" value="epmc">
-        <span>🇪🇺 Europe PMC Only</span>
+
+      <!-- Semantic Scholar -->
+      <label class="engine-option selected" id="source-opt-s2" onclick="toggleSearchSource('s2', this, event)" style="cursor:pointer;padding:12px 14px;border:2px solid var(--accent);border-radius:10px;background:#f0fdfa;display:flex;align-items:center;gap:10px;transition:all .2s">
+        <input type="checkbox" name="searchengine" value="s2" checked style="accent-color:var(--accent);width:18px;height:18px;cursor:pointer">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--ink)">🎓 Semantic Scholar</div>
+          <div style="font-size:.74rem;color:#64748B">Allen AI Academic Research Graph</div>
+        </div>
       </label>
-      <label class="engine-option" onclick="selectSearchEngine(this,'s2')">
-        <input type="radio" name="searchengine" value="s2">
-        <span>🎓 Semantic Scholar Only</span>
+
+      <!-- Crossref -->
+      <label class="engine-option selected" id="source-opt-crossref" onclick="toggleSearchSource('crossref', this, event)" style="cursor:pointer;padding:12px 14px;border:2px solid var(--accent);border-radius:10px;background:#f0fdfa;display:flex;align-items:center;gap:10px;transition:all .2s">
+        <input type="checkbox" name="searchengine" value="crossref" checked style="accent-color:var(--accent);width:18px;height:18px;cursor:pointer">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--ink)">🔍 Crossref</div>
+          <div style="font-size:.74rem;color:#64748B">Global DOI Scholarly Registry (150M+)</div>
+        </div>
+      </label>
+
+      <!-- OpenAlex -->
+      <label class="engine-option selected" id="source-opt-openalex" onclick="toggleSearchSource('openalex', this, event)" style="cursor:pointer;padding:12px 14px;border:2px solid var(--accent);border-radius:10px;background:#f0fdfa;display:flex;align-items:center;gap:10px;transition:all .2s">
+        <input type="checkbox" name="searchengine" value="openalex" checked style="accent-color:var(--accent);width:18px;height:18px;cursor:pointer">
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--ink)">🌐 OpenAlex</div>
+          <div style="font-size:.74rem;color:#64748B">Open Scholarly Knowledge Graph (250M+)</div>
+        </div>
       </label>
     </div>
 
@@ -901,11 +1036,25 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
       <span class="pill">📋 Step 3 · Per-Paper Analysis Report</span>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
         <div>
-          <h2 class="sec-h" style="margin:0">Individual Paper Reports</h2>
-          <p class="hint" style="margin:4px 0 0">Each paper is shown with its relevance score, validation status, abstract, and Vancouver reference. You can remove individual papers using the <strong>🗑️ Remove</strong> button before generating the draft.</p>
+          <h2 class="sec-h" style="margin:0">Individual Paper Reports &amp; Evidence Curation</h2>
+          <p class="hint" style="margin:4px 0 0">Curate your synthesis pool: toggle <strong>Include / Exclude</strong> on any paper, or view its <strong>🔬 Full Evaluation</strong> before generating the final draft.</p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <span id="banner-count" style="font-size:.85rem;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <!-- Paper Curation Controls & Filters Bar -->
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:.82rem;font-weight:700;color:var(--ink)">Filter:</span>
+          <button type="button" class="chip active" id="filter-chip-all" onclick="setStep3Filter('all', this)">All (<span id="count-filter-all">0</span>)</button>
+          <button type="button" class="chip" id="filter-chip-included" onclick="setStep3Filter('included', this)">✔ Included (<span id="count-filter-inc">0</span>)</button>
+          <button type="button" class="chip" id="filter-chip-excluded" onclick="setStep3Filter('excluded', this)">🚫 Excluded (<span id="count-filter-exc">0</span>)</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button type="button" class="secondary" onclick="bulkSetInclusion(true)" style="font-size:.78rem;padding:4px 12px">✔ Include All</button>
+          <button type="button" class="secondary" onclick="excludeLowRelevance(50)" style="font-size:.78rem;padding:4px 12px">⚡ Exclude Low Relevance (&lt;50%)</button>
         </div>
       </div>
 
@@ -1074,6 +1223,20 @@ button.secondary:disabled { opacity: .55; cursor: not-allowed; }
 <footer>
   SciDraft AI v2.0 - AI-Assisted Literature Review Draft Platform · Powered by <a href="https://europepmc.org" target="_blank" rel="noopener">Europe PMC</a> &amp; <a href="https://www.semanticscholar.org" target="_blank" rel="noopener">Semantic Scholar</a>. Educational &amp; Research Use Only - always verify generated content clinically and academically. Copyrights©RaoufRoshdy2026
 </footer>
+<!-- Evaluation Modal Dialog -->
+<div id="eval-modal-backdrop" class="eval-modal-backdrop hidden" onclick="closeEvaluationModal(event)">
+  <div class="eval-modal-content" onclick="event.stopPropagation()">
+    <div class="eval-modal-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.3rem">🔬</span>
+        <h3 id="eval-modal-title" style="margin:0;font-size:1.05rem;color:var(--ink)">Comprehensive Evidence &amp; Quality Evaluation</h3>
+      </div>
+      <button type="button" class="eval-modal-close" onclick="closeEvaluationModal()">&times;</button>
+    </div>
+    <div id="eval-modal-body" class="eval-modal-body"></div>
+  </div>
+</div>
+
 </div><!-- .wrap -->
 
 <!-- ══════════════════════════════════════════════════════════
@@ -1096,34 +1259,116 @@ let STATE = {
   relevance: [],
   relevanceDetails: [],
   paper: null,
+  activePapers: null,
   yearRange: 5,
   pageSize: 30,
   duplicatesRemoved: 0,
-  searchSource: 'both',
-  sourceCounts: { epmc: 0, s2: 0, merged: 0 },
-  citationStyle: 'vancouver'
+  selectedSources: ['epmc', 's2', 'crossref', 'openalex'],
+  sourceCounts: { epmc: 0, s2: 0, crossref: 0, openalex: 0, merged: 0 },
+  citationStyle: 'vancouver',
+  step3Filter: 'all'
 };
 let currentAbortController = null;
 
-function selectSearchEngine(el, mode){
-  document.querySelectorAll('.engine-option').forEach(l=>{
-    l.classList.remove('selected');
-    const span = l.querySelector('span');
-    if (span) span.textContent = span.textContent.replace(' ✓','');
-    const rad = l.querySelector('input');
-    if(rad) rad.checked = false;
+function toggleSearchSource(src, labelEl, evt){
+  if (evt) {
+    if (evt.target && evt.target.tagName === 'INPUT') {
+      // allow default checkbox toggle
+    } else {
+      const cb = labelEl.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = !cb.checked;
+    }
+  }
+  const checkedBoxes = Array.from(document.querySelectorAll('input[name="searchengine"]:checked')).map(cb => cb.value);
+  if (checkedBoxes.length === 0) {
+    const cb = labelEl.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = true;
+    STATE.selectedSources = [src];
+  } else {
+    STATE.selectedSources = checkedBoxes;
+  }
+  updateSourceOptionsUI();
+}
+
+function selectAllSearchSources(all = true){
+  if (all) {
+    STATE.selectedSources = ['epmc', 's2', 'crossref', 'openalex'];
+  } else {
+    STATE.selectedSources = ['epmc', 's2'];
+  }
+  const allSources = ['epmc', 's2', 'crossref', 'openalex'];
+  allSources.forEach(s => {
+    const el = document.getElementById(`source-opt-${s}`);
+    const isSelected = STATE.selectedSources.includes(s);
+    if (el) {
+      el.classList.toggle('selected', isSelected);
+      el.style.background = isSelected ? '#f0fdfa' : '#fff';
+      el.style.borderColor = isSelected ? 'var(--accent)' : 'var(--border)';
+      const cb = el.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = isSelected;
+    }
   });
-  el.classList.add('selected');
-  const rad = el.querySelector('input');
-  if(rad) rad.checked = true;
-  const span = el.querySelector('span');
-  if (span && !span.textContent.includes('✓')) span.textContent += ' ✓';
-  STATE.searchSource = mode;
+  updateSourceOptionsUI();
+}
+
+function updateSourceOptionsUI(){
+  const allSources = ['epmc', 's2', 'crossref', 'openalex'];
+  const names = {
+    epmc: 'Europe PMC',
+    s2: 'Semantic Scholar',
+    crossref: 'Crossref',
+    openalex: 'OpenAlex'
+  };
+  allSources.forEach(s => {
+    const el = document.getElementById(`source-opt-${s}`);
+    const isSelected = STATE.selectedSources.includes(s);
+    if (el) {
+      el.classList.toggle('selected', isSelected);
+      el.style.background = isSelected ? '#f0fdfa' : '#fff';
+      el.style.borderColor = isSelected ? 'var(--accent)' : 'var(--border)';
+      const cb = el.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = isSelected;
+    }
+  });
+
+  const badge = document.getElementById('source-selection-badge');
+  if (badge) {
+    const n = STATE.selectedSources.length;
+    const listStr = STATE.selectedSources.map(s => names[s] || s).join(' + ');
+    badge.textContent = `✔ ${n} of 4 Databases Active: ${listStr}`;
+  }
+}
+
+function getActiveDatabasesLabel(sources = STATE.selectedSources) {
+  const active = Array.isArray(sources) && sources.length > 0 ? sources : ['epmc', 's2', 'crossref', 'openalex'];
+  const labels = {
+    epmc: 'Europe PMC',
+    s2: 'Semantic Scholar',
+    crossref: 'Crossref',
+    openalex: 'OpenAlex'
+  };
+  const activeNames = active.map(k => labels[k] || k);
+  if (activeNames.length === 4) return 'Europe PMC, Semantic Scholar, Crossref, and OpenAlex databases';
+  if (activeNames.length === 1) return `the ${activeNames[0]} database`;
+  return activeNames.slice(0, -1).join(', ') + ' and ' + activeNames[activeNames.length - 1] + ' databases';
 }
 
 function getSourceBadgeHTML(paper){
-  if(paper.badge === 'cross-verified' || paper.source === 'both' || (paper.sources && paper.sources.length > 1)){
-    return `<span class="source-badge source-both" title="Retrieved and cross-verified in both Europe PMC and Semantic Scholar">🌐 Europe PMC + Semantic Scholar</span>`;
+  if(paper.badge === 'cross-verified' || paper.source === 'multi' || paper.source === 'both' || (paper.sources && paper.sources.length > 1)){
+    const names = (paper.sources || []).map(s => {
+      if(s === 'epmc' || s === 'Europe PMC') return 'Europe PMC';
+      if(s === 's2' || s === 'Semantic Scholar') return 'Semantic Scholar';
+      if(s === 'crossref' || s === 'Crossref') return 'Crossref';
+      if(s === 'openalex' || s === 'OpenAlex') return 'OpenAlex';
+      return s;
+    });
+    return `<span class="source-badge source-both" title="Cross-verified across multiple databases: ${names.join(', ')}">🌐 ${names.join(' + ')}</span>`;
+  }
+  if(paper.source === 'crossref' || (paper.sources && paper.sources.includes('Crossref'))){
+    return `<span class="source-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a" title="Retrieved from Crossref DOI Registry">🔍 Crossref</span>`;
+  }
+  if(paper.source === 'openalex' || (paper.sources && paper.sources.includes('OpenAlex'))){
+    return `<span class="source-badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe" title="Retrieved from OpenAlex Knowledge Graph">🌐 OpenAlex</span>`;
   }
   if(paper.source === 's2' || (paper.sources && paper.sources.includes('Semantic Scholar'))){
     return `<span class="source-badge source-s2" title="Retrieved from Semantic Scholar Academic Graph">🎓 Semantic Scholar</span>`;
@@ -1526,7 +1771,23 @@ function resetApp(){
   const cancelWrap = document.getElementById('proc-cancel-wrapper');
   if(cancelWrap) cancelWrap.classList.remove('hidden');
 
-  STATE = { topic:'', papers:[], validations:[], relevance:[], relevanceDetails:[], paper:null, yearRange:5, pageSize:30, duplicatesRemoved:0 };
+  STATE = {
+    topic: '',
+    papers: [],
+    validations: [],
+    relevance: [],
+    relevanceDetails: [],
+    paper: null,
+    activePapers: null,
+    yearRange: 5,
+    pageSize: 30,
+    duplicatesRemoved: 0,
+    selectedSources: ['epmc', 's2', 'crossref', 'openalex'],
+    sourceCounts: { epmc: 0, s2: 0, crossref: 0, openalex: 0, merged: 0 },
+    citationStyle: 'vancouver',
+    step3Filter: 'all'
+  };
+  selectAllSearchSources(true);
   setBtnLoading(false);
   document.querySelectorAll('.paper-option').forEach(l => {
     l.classList.remove('selected');
@@ -1789,49 +2050,242 @@ async function fetchSemanticScholar(topic, pageSize, yearRange, signal, apiKey){
   return { results: [], hitCount: lastHitCount };
 }
 
-async function fetchPapers(topic, pageSize, yearRange, signal, sourceMode = 'both', s2Key = ''){
-  const mode = sourceMode || 'both';
-  if(mode === 'epmc'){
-    const res = await fetchEuropePMC(topic, pageSize, yearRange, signal);
-    return { results: res.results, hitCount: res.hitCount, epmcCount: res.results.length, s2Count: 0 };
+// ─────────────────────────────────────────────────────────────
+// CROSSREF API SEARCH & PARSER (150M+ Records)
+// ─────────────────────────────────────────────────────────────
+function parseCrossrefPapers(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item, idx) => {
+    const title = Array.isArray(item.title) ? item.title[0] : (item.title || '');
+    if (!title) return null;
+
+    let authors = '';
+    if (Array.isArray(item.author) && item.author.length > 0) {
+      authors = item.author.map(a => {
+        if (a.name) return a.name;
+        const family = a.family || '';
+        const given = a.given || '';
+        return family ? (given ? `${family} ${given}` : family) : (given || 'Author');
+      }).join(', ');
+    } else {
+      authors = 'Unknown Authors';
+    }
+
+    let year = null;
+    const dp = item['published-print']?.['date-parts'] || item['published-online']?.['date-parts'] || item.created?.['date-parts'];
+    if (dp && dp[0] && dp[0][0]) year = parseInt(dp[0][0], 10);
+    if (!year) year = new Date().getFullYear();
+
+    const journal = Array.isArray(item['container-title']) ? item['container-title'][0] : (item['container-title'] || '');
+    const volume = item.volume ? String(item.volume) : '';
+    const issue = item.issue ? String(item.issue) : '';
+    const pages = item.page ? String(item.page) : '';
+    const rawDoi = item.DOI ? String(item.DOI).trim() : '';
+    const cleanDoi = normalizeDoi(rawDoi);
+    const url = item.URL || (cleanDoi ? `https://doi.org/${cleanDoi}` : '');
+    const abstract = cleanHtmlText(item.abstract || '');
+
+    return {
+      id: `crossref_${cleanDoi || idx}`,
+      source: 'crossref',
+      sources: ['Crossref'],
+      title: cleanHtmlText(title),
+      authors: cleanHtmlText(authors),
+      journal: cleanHtmlText(journal),
+      year,
+      volume,
+      issue,
+      pages,
+      doi: cleanDoi,
+      pmid: '',
+      pmcid: '',
+      url,
+      abstract,
+      citedBy: item['is-referenced-by-count'] || 0,
+      isOpenAccess: false,
+      pubType: item.type ? (item.type.charAt(0).toUpperCase() + item.type.slice(1)) : 'Journal Article'
+    };
+  }).filter(Boolean);
+}
+
+async function fetchCrossref(topic, pageSize, yearRange, signal) {
+  const cleanQ = cleanQueryKeywords(topic);
+  const rows = Math.min(50, Math.max(10, pageSize));
+  let url = `https://api.crossref.org/works?query=${encodeURIComponent(cleanQ)}&rows=${rows}&mailto=scidraft@example.com`;
+  if (yearRange && yearRange < 99) {
+    const fromYear = new Date().getFullYear() - yearRange;
+    url += `&filter=from-pub-date:${fromYear}-01-01`;
   }
-  if(mode === 's2'){
-    const res = await fetchSemanticScholar(topic, pageSize, yearRange, signal, s2Key);
-    return { results: res.results, hitCount: res.hitCount, epmcCount: 0, s2Count: res.results.length };
-  }
-
-  // Dual engine: run Europe PMC and Semantic Scholar concurrently
-  const [epmcSettled, s2Settled] = await Promise.allSettled([
-    fetchEuropePMC(topic, Math.max(15, Math.ceil(pageSize * 0.75)), yearRange, signal),
-    fetchSemanticScholar(topic, Math.max(15, Math.ceil(pageSize * 0.75)), yearRange, signal, s2Key)
-  ]);
-
-  if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-
-  const epmcOk = epmcSettled.status === 'fulfilled';
-  const s2Ok   = s2Settled.status === 'fulfilled';
-
-  if(!epmcOk && !s2Ok){
-    const epmcErr = epmcSettled.reason;
-    const s2Err   = s2Settled.reason;
-    const msg = `Dual search failed: Europe PMC (${epmcErr?.message || 'failed'}) & Semantic Scholar (${s2Err?.message || 'failed'})`;
-    const err = new Error(msg);
-    err.status = epmcErr?.status || s2Err?.status || 500;
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    const err = new Error(`Crossref API HTTP ${res.status}`);
+    err.status = res.status;
+    err.engine = 'Crossref';
     throw err;
   }
+  const json = await res.json();
+  const items = json.message?.items || [];
+  const hitCount = json.message?.['total-results'] || items.length;
+  const results = parseCrossrefPapers(items);
+  return { results, hitCount };
+}
 
-  const epmcResults = epmcOk ? epmcSettled.value.results : [];
-  const s2Results   = s2Ok ? s2Settled.value.results : [];
-  const totalHitCount = (epmcOk ? epmcSettled.value.hitCount : 0) + (s2Ok ? s2Settled.value.hitCount : 0);
+// ─────────────────────────────────────────────────────────────
+// OPENALEX API SEARCH & PARSER (250M+ Records)
+// ─────────────────────────────────────────────────────────────
+function parseOpenAlexPapers(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item, idx) => {
+    const title = item.title || item.display_name || '';
+    if (!title) return null;
 
-  const combined = [...epmcResults, ...s2Results];
+    let authors = '';
+    if (Array.isArray(item.authorships) && item.authorships.length > 0) {
+      authors = item.authorships.map(a => a.author?.display_name || '').filter(Boolean).join(', ');
+    }
+    if (!authors) authors = 'Unknown Authors';
+
+    const year = item.publication_year || (item.publication_date ? new Date(item.publication_date).getFullYear() : new Date().getFullYear());
+    const journal = item.primary_location?.source?.display_name || item.host_venue?.name || '';
+
+    const bib = item.biblio || {};
+    const volume = bib.volume ? String(bib.volume) : '';
+    const issue = bib.issue ? String(bib.issue) : '';
+    const pages = (bib.first_page && bib.last_page) ? `${bib.first_page}-${bib.last_page}` : (bib.first_page ? String(bib.first_page) : '');
+
+    let rawDoi = item.doi ? item.doi.replace(/^https?:\/\/doi\.org\//i, '') : '';
+    const cleanDoi = normalizeDoi(rawDoi);
+    const pmid = item.ids?.pmid ? item.ids.pmid.replace(/^https?:\/\/pubmed\.ncbi\.nlm\.nih\.gov\//i, '').replace(/\//g, '') : '';
+    const isOpenAccess = Boolean(item.open_access?.is_oa);
+    const openAccessPdfUrl = item.open_access?.oa_url || '';
+
+    let abstract = '';
+    if (item.abstract_inverted_index && typeof item.abstract_inverted_index === 'object') {
+      const words = [];
+      for (const [w, positions] of Object.entries(item.abstract_inverted_index)) {
+        if (Array.isArray(positions)) {
+          for (const pos of positions) {
+            words[pos] = w;
+          }
+        }
+      }
+      abstract = words.filter(Boolean).join(' ');
+    }
+
+    return {
+      id: `openalex_${item.id || idx}`,
+      source: 'openalex',
+      sources: ['OpenAlex'],
+      title: cleanHtmlText(title),
+      authors: cleanHtmlText(authors),
+      journal: cleanHtmlText(journal),
+      year,
+      volume,
+      issue,
+      pages,
+      doi: cleanDoi,
+      pmid,
+      pmcid: '',
+      url: item.doi || (item.id ? `https://openalex.org/${item.id.split('/').pop()}` : ''),
+      abstract: cleanHtmlText(abstract),
+      citedBy: item.cited_by_count || 0,
+      isOpenAccess,
+      openAccessPdfUrl,
+      pubType: item.type ? (item.type.charAt(0).toUpperCase() + item.type.slice(1)) : 'Journal Article'
+    };
+  }).filter(Boolean);
+}
+
+async function fetchOpenAlex(topic, pageSize, yearRange, signal) {
+  const cleanQ = cleanQueryKeywords(topic);
+  const perPage = Math.min(50, Math.max(10, pageSize));
+  let url = `https://api.openalex.org/works?search=${encodeURIComponent(cleanQ)}&per-page=${perPage}&mailto=scidraft@example.com`;
+  if (yearRange && yearRange < 99) {
+    const fromYear = new Date().getFullYear() - yearRange;
+    url += `&filter=from_publication_date:${fromYear}-01-01`;
+  }
+  const res = await fetch(url, { signal });
+  if (!res.ok) {
+    const err = new Error(`OpenAlex API HTTP ${res.status}`);
+    err.status = res.status;
+    err.engine = 'OpenAlex';
+    throw err;
+  }
+  const json = await res.json();
+  const items = json.results || [];
+  const hitCount = json.meta?.count || items.length;
+  const results = parseOpenAlexPapers(items);
+  return { results, hitCount };
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONCURRENT MULTI-SOURCE HARVESTER (Europe PMC, S2, Crossref, OpenAlex)
+// ─────────────────────────────────────────────────────────────
+async function fetchPapers(topic, pageSize, yearRange, signal, selectedSources = STATE.selectedSources, s2Key = ''){
+  const sources = (Array.isArray(selectedSources) && selectedSources.length > 0)
+    ? selectedSources
+    : (selectedSources === 'epmc' ? ['epmc'] : selectedSources === 's2' ? ['s2'] : ['epmc', 's2', 'crossref', 'openalex']);
+
+  const perSource = Math.max(12, Math.ceil((pageSize * 1.25) / sources.length));
+  const promises = [];
+  const sourceKeys = [];
+
+  if (sources.includes('epmc')) {
+    promises.push(fetchEuropePMC(topic, perSource, yearRange, signal));
+    sourceKeys.push('epmc');
+  }
+  if (sources.includes('s2')) {
+    promises.push(fetchSemanticScholar(topic, perSource, yearRange, signal, s2Key));
+    sourceKeys.push('s2');
+  }
+  if (sources.includes('crossref')) {
+    promises.push(fetchCrossref(topic, perSource, yearRange, signal));
+    sourceKeys.push('crossref');
+  }
+  if (sources.includes('openalex')) {
+    promises.push(fetchOpenAlex(topic, perSource, yearRange, signal));
+    sourceKeys.push('openalex');
+  }
+
+  const settled = await Promise.allSettled(promises);
+  if(signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+  const resultsBySource = {};
+  let totalHitCount = 0;
+  let allCombined = [];
+  let successfulSources = 0;
+  const failedEngines = [];
+
+  settled.forEach((res, i) => {
+    const key = sourceKeys[i];
+    if (res.status === 'fulfilled' && res.value) {
+      resultsBySource[key] = res.value.results || [];
+      totalHitCount += (res.value.hitCount || res.value.results?.length || 0);
+      allCombined = allCombined.concat(res.value.results || []);
+      successfulSources++;
+    } else {
+      resultsBySource[key] = [];
+      const errMsg = res.reason?.message || 'failed';
+      failedEngines.push(`${key} (${errMsg})`);
+      console.warn(`Source ${key} search failed:`, errMsg);
+    }
+  });
+
+  if (successfulSources === 0) {
+    throw new Error(`All selected search engines failed: ${failedEngines.join('; ')}. Please check network connection.`);
+  }
+
   return {
-    results: combined,
+    results: allCombined,
     hitCount: totalHitCount,
-    epmcCount: epmcResults.length,
-    s2Count: s2Results.length,
-    epmcFailed: !epmcOk,
-    s2Failed: !s2Ok
+    sourceCounts: {
+      epmc: resultsBySource.epmc?.length || 0,
+      s2: resultsBySource.s2?.length || 0,
+      crossref: resultsBySource.crossref?.length || 0,
+      openalex: resultsBySource.openalex?.length || 0
+    },
+    resultsBySource,
+    failedEngines
   };
 }
 
@@ -1978,12 +2432,18 @@ function deduplicatePapers(rawPapers){
 
     if(existing){
       dupCount++;
-      const isCrossEngine = (existing.source !== p.source) || p.source === 'both' || existing.source === 'both';
+      const isCrossEngine = (existing.source !== p.source) || p.source === 'both' || existing.source === 'both' || p.source === 'multi' || existing.source === 'multi';
       if(isCrossEngine){
         existing.source = 'both';
         existing.badge = 'cross-verified';
         const srcs = new Set([...(existing.sources || [existing.source]), ...(p.sources || [p.source])]);
-        existing.sources = [...srcs].map(s => s === 'epmc' ? 'Europe PMC' : s === 's2' ? 'Semantic Scholar' : s);
+        existing.sources = [...srcs].map(s => {
+          if (s === 'epmc') return 'Europe PMC';
+          if (s === 's2') return 'Semantic Scholar';
+          if (s === 'crossref') return 'Crossref';
+          if (s === 'openalex') return 'OpenAlex';
+          return s;
+        });
         mergedCount++;
       }
 
@@ -2034,7 +2494,7 @@ function deduplicatePapers(rawPapers){
     } else {
       p.doi = normDoi;
       p.pmid = normPmid;
-      p.sources = p.sources || [p.source === 'epmc' ? 'Europe PMC' : p.source === 's2' ? 'Semantic Scholar' : 'Europe PMC'];
+      p.sources = p.sources || [p.source === 'epmc' ? 'Europe PMC' : p.source === 's2' ? 'Semantic Scholar' : p.source === 'crossref' ? 'Crossref' : p.source === 'openalex' ? 'OpenAlex' : 'Europe PMC'];
       keys.forEach(k => seen.set(k, p));
     }
   }
@@ -2046,15 +2506,21 @@ function deduplicatePapers(rawPapers){
 // ═══════════════════════════════════════════════════════════════
 // FLEXIBLE RATIO ORCHESTRATION & DYNAMIC DEFICIT BALANCING
 // ═══════════════════════════════════════════════════════════════
-function balanceAndCapRatio(uniquePapers, targetCount, sourceMode = 'both'){
-  if(sourceMode !== 'both' || uniquePapers.length <= targetCount){
+function balanceAndCapRatio(uniquePapers, targetCount, selectedSources = STATE.selectedSources){
+  const activeSources = (Array.isArray(selectedSources) && selectedSources.length > 0)
+    ? selectedSources
+    : (selectedSources === 'epmc' ? ['epmc'] : selectedSources === 's2' ? ['s2'] : ['epmc', 's2', 'crossref', 'openalex']);
+
+  if(uniquePapers.length <= targetCount){
     const selected = uniquePapers.slice(0, targetCount);
     return {
       selected,
       stats: {
-        bothCount: selected.filter(p => p.source === 'both').length,
+        bothCount: selected.filter(p => (p.sources && p.sources.length > 1) || p.source === 'both' || p.source === 'multi').length,
         epmcOnlyCount: selected.filter(p => p.source === 'epmc').length,
         s2OnlyCount: selected.filter(p => p.source === 's2').length,
+        crossrefOnlyCount: selected.filter(p => p.source === 'crossref').length,
+        openalexOnlyCount: selected.filter(p => p.source === 'openalex').length,
         targetRequested: targetCount,
         finalCount: selected.length,
         deficitTransferred: 0
@@ -2062,72 +2528,62 @@ function balanceAndCapRatio(uniquePapers, targetCount, sourceMode = 'both'){
     };
   }
 
-  const bothPool = [];
-  const epmcPool = [];
-  const s2Pool = [];
+  const multiPool = [];
+  const singlePools = { epmc: [], s2: [], crossref: [], openalex: [] };
 
   for(const p of uniquePapers){
-    if(p.source === 'both') bothPool.push(p);
-    else if(p.source === 's2') s2Pool.push(p);
-    else epmcPool.push(p);
+    if((p.sources && p.sources.length > 1) || p.source === 'both' || p.source === 'multi'){
+      multiPool.push(p);
+    } else {
+      const s = p.source || 'epmc';
+      if(singlePools[s]) singlePools[s].push(p);
+      else multiPool.push(p);
+    }
   }
 
   // Sort pools by citation count and publication year for highest evidentiary quality
   const ranker = (a, b) => (b.citedBy || 0) - (a.citedBy || 0) || (b.year || 0) - (a.year || 0);
-  bothPool.sort(ranker);
-  epmcPool.sort(ranker);
-  s2Pool.sort(ranker);
+  multiPool.sort(ranker);
+  Object.values(singlePools).forEach(pool => pool.sort(ranker));
 
   const selected = [];
-  // 1. Cross-engine consensus papers take highest priority (high confidence)
-  const selectedBoth = bothPool.slice(0, targetCount);
-  selected.push(...selectedBoth);
+  // 1. Cross-engine / multi-source consensus papers take highest priority
+  const selectedMulti = multiPool.slice(0, targetCount);
+  selected.push(...selectedMulti);
 
   let remaining = targetCount - selected.length;
   let deficitTransferred = 0;
 
-  // 2. Allocate remaining slots 50/50 with dynamic deficit reallocation
+  // 2. Round-robin balance among active single pools
   if(remaining > 0){
-    let half = Math.ceil(remaining / 2);
-    let takeEpmc = Math.min(epmcPool.length, half);
-    let takeS2 = Math.min(s2Pool.length, remaining - takeEpmc);
-
-    // Deficit transfer: if S2 has fewer papers than its 50% share, transfer to EPMC
-    if(takeS2 < (remaining - takeEpmc) && epmcPool.length > takeEpmc){
-      const extraEpmc = Math.min(epmcPool.length - takeEpmc, remaining - (takeEpmc + takeS2));
-      takeEpmc += extraEpmc;
-      deficitTransferred += extraEpmc;
-    }
-    // Deficit transfer: if EPMC has fewer papers than its 50% share, transfer to S2
-    if(takeEpmc < half && s2Pool.length > takeS2){
-      const extraS2 = Math.min(s2Pool.length - takeS2, remaining - (takeEpmc + takeS2));
-      takeS2 += extraS2;
-      deficitTransferred += extraS2;
-    }
-
-    const eSlice = epmcPool.slice(0, takeEpmc);
-    const sSlice = s2Pool.slice(0, takeS2);
-
-    // Interleave so the user gets an equitable mix throughout the review container
-    let i = 0, j = 0;
-    while(i < eSlice.length || j < sSlice.length){
-      if(i < eSlice.length) selected.push(eSlice[i++]);
-      if(j < sSlice.length) selected.push(sSlice[j++]);
+    const activeSingles = activeSources.filter(s => singlePools[s]);
+    let added = true;
+    while(selected.length < targetCount && added){
+      added = false;
+      for(const s of activeSingles){
+        if(selected.length < targetCount && singlePools[s].length > 0){
+          selected.push(singlePools[s].shift());
+          added = true;
+        }
+      }
     }
   }
 
   return {
     selected,
     stats: {
-      bothCount: selected.filter(p => p.source === 'both').length,
+      bothCount: selected.filter(p => (p.sources && p.sources.length > 1) || p.source === 'both' || p.source === 'multi').length,
       epmcOnlyCount: selected.filter(p => p.source === 'epmc').length,
       s2OnlyCount: selected.filter(p => p.source === 's2').length,
+      crossrefOnlyCount: selected.filter(p => p.source === 'crossref').length,
+      openalexOnlyCount: selected.filter(p => p.source === 'openalex').length,
       targetRequested: targetCount,
       finalCount: selected.length,
       deficitTransferred
     }
   };
 }
+
 
 // ═══════════════════════════════════════════════════════════════
 // COMPREHENSIVE STUDY-DESIGN & PAPER TYPE CLASSIFIER
@@ -3173,57 +3629,87 @@ function scoreRelevance(paper, topic){
 // RENDER PER-PAPER REPORT CARDS (Step 3)
 // ═══════════════════════════════════════════════════════════════
 function renderPaperCards(){
-  const p = STATE.papers, v = STATE.validations, r = STATE.relevance, rd = STATE.relevanceDetails;
+  const p = STATE.papers || [], v = STATE.validations || [], r = STATE.relevance || [], rd = STATE.relevanceDetails || [];
   const verified = v.filter(x=>x.valid).length;
   const avgRel = Math.round(r.reduce((a,b)=>a+b,0)/(r.length||1));
   const oaCount = p.filter(paper => paper.isOpenAccess || Boolean(paper.pmcid) || Boolean(paper.openAccessPdfUrl)).length;
   const warnCount = p.filter((paper, idx) => !getManualVerificationWarnings(paper, v[idx], r[idx]).isClean).length;
-  const epmcCount = p.filter(paper => paper.sources?.includes('Europe PMC') || paper.source === 'epmc' || paper.source === 'both').length;
-  const s2Count   = p.filter(paper => paper.sources?.includes('Semantic Scholar') || paper.source === 's2' || paper.source === 'both').length;
-  const bothCount = p.filter(paper => paper.source === 'both').length;
+  const incCount = p.filter(paper => !paper.excluded).length;
+  const excCount = p.filter(paper => paper.excluded).length;
+
+  const epmcCount = p.filter(paper => paper.sources?.includes('Europe PMC') || paper.source === 'epmc').length;
+  const s2Count   = p.filter(paper => paper.sources?.includes('Semantic Scholar') || paper.source === 's2').length;
+  const crossrefCount = p.filter(paper => paper.sources?.includes('Crossref') || paper.source === 'crossref').length;
+  const openalexCount = p.filter(paper => paper.sources?.includes('OpenAlex') || paper.source === 'openalex').length;
+  const multiCount = p.filter(paper => (paper.sources && paper.sources.length > 1) || paper.source === 'both' || paper.source === 'multi').length;
+
+  // Filter toolbar counts
+  const countAllEl = document.getElementById('count-filter-all');
+  if(countAllEl) countAllEl.textContent = p.length;
+  const countIncEl = document.getElementById('count-filter-inc');
+  if(countIncEl) countIncEl.textContent = incCount;
+  const countExcEl = document.getElementById('count-filter-exc');
+  if(countExcEl) countExcEl.textContent = excCount;
 
   // Stats banner
-  document.getElementById('banner-count').textContent =
-    `${p.length} unique papers · ${verified} verified · ${STATE.duplicatesRemoved || 0} duplicates excluded · Avg heuristic relevance: ${avgRel}%`;
+  const bannerEl = document.getElementById('banner-count');
+  if(bannerEl){
+    bannerEl.textContent = `${p.length} unique papers (${incCount} included, ${excCount} excluded) · ${verified} verified · ${STATE.duplicatesRemoved || 0} duplicates excluded · Avg heuristic relevance: ${avgRel}%`;
+  }
 
-  document.getElementById('summary-stats').innerHTML = `
-    <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:var(--accent)">${p.length}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Unique Papers</div>
-    </div>
-    ${(STATE.searchSource !== 's2' || epmcCount > 0) ? `
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:#1e40af">${epmcCount}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Europe PMC</div>
-    </div>` : ''}
-    ${(STATE.searchSource !== 'epmc' || s2Count > 0) ? `
-    <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:#6d28d9">${s2Count}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Semantic Scholar</div>
-    </div>` : ''}
-    ${bothCount > 0 ? `
-    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:#047857">${bothCount}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Cross-Engine Matched</div>
-    </div>` : ''}
-    <div style="background:var(--good-bg);border:1px solid var(--good);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:var(--good)">${verified}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Verified Records</div>
-    </div>
-    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:var(--ink)">${oaCount}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Open Access</div>
-    </div>
-    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:var(--ink)">${avgRel}%</div>
-      <div style="font-size:.74rem;color:var(--muted)">Avg Heuristic Rel</div>
-    </div>
-    <div style="background:var(--warn-bg);border:1px solid var(--warn);border-radius:8px;padding:10px 14px;text-align:center;min-width:110px">
-      <div style="font-size:1.45rem;font-weight:700;color:var(--warn)">${warnCount}</div>
-      <div style="font-size:.74rem;color:var(--muted)">Manual Flags</div>
-    </div>`;
+  const summaryStatsEl = document.getElementById('summary-stats');
+  if(summaryStatsEl){
+    summaryStatsEl.innerHTML = `
+      <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:var(--accent)">${p.length}</div>
+        <div style="font-size:.74rem;color:var(--muted)">Total Harvested</div>
+      </div>
+      <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#047857">${incCount}</div>
+        <div style="font-size:.74rem;color:#047857;font-weight:600">✅ Included in Draft</div>
+      </div>
+      ${excCount > 0 ? `
+      <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#64748b">${excCount}</div>
+        <div style="font-size:.74rem;color:#64748b">⭕ Excluded</div>
+      </div>` : ''}
+      ${epmcCount > 0 ? `
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#1e40af">${epmcCount}</div>
+        <div style="font-size:.74rem;color:var(--muted)">Europe PMC</div>
+      </div>` : ''}
+      ${s2Count > 0 ? `
+      <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#6d28d9">${s2Count}</div>
+        <div style="font-size:.74rem;color:var(--muted)">Semantic Scholar</div>
+      </div>` : ''}
+      ${crossrefCount > 0 ? `
+      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#92400e">${crossrefCount}</div>
+        <div style="font-size:.74rem;color:var(--muted)">Crossref</div>
+      </div>` : ''}
+      ${openalexCount > 0 ? `
+      <div style="background:#e0e7ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#3730a3">${openalexCount}</div>
+        <div style="font-size:.74rem;color:var(--muted)">OpenAlex</div>
+      </div>` : ''}
+      ${multiCount > 0 ? `
+      <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:#047857">${multiCount}</div>
+        <div style="font-size:.74rem;color:var(--muted)">Cross-Verified</div>
+      </div>` : ''}
+      <div style="background:var(--good-bg);border:1px solid var(--good);border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:var(--good)">${verified}</div>
+        <div style="font-size:.74rem;color:var(--muted)">Verified Records</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;text-align:center;min-width:105px">
+        <div style="font-size:1.45rem;font-weight:700;color:var(--ink)">${avgRel}%</div>
+        <div style="font-size:.74rem;color:var(--muted)">Avg Heuristic Rel</div>
+      </div>`;
+  }
 
   const container = document.getElementById('paper-cards');
+  if(!container) return;
   container.innerHTML = '';
 
   if(!p.length){
@@ -3231,7 +3717,15 @@ function renderPaperCards(){
     return;
   }
 
+  const activeFilter = STATE.step3Filter || 'all';
+  let displayedCount = 0;
+
   p.forEach((paper, i)=>{
+    const isExcluded = Boolean(paper.excluded);
+    if(activeFilter === 'included' && isExcluded) return;
+    if(activeFilter === 'excluded' && !isExcluded) return;
+    displayedCount++;
+
     const rel      = r[i]||0;
     const relObj   = (rd && rd[i]) ? rd[i] : scoreHeuristicRelevance(paper, STATE.topic);
     const val      = v[i]||{};
@@ -3239,11 +3733,13 @@ function renderPaperCards(){
     const auth     = paper.authors ? paper.authors.split(',')[0].trim()+(paper.authors.includes(',')?' et al.':'') : '—';
     const link     = paper.doi ? `https://doi.org/${paper.doi}` : paper.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${paper.pmid}/` : paper.s2Url || null;
     const design   = classifyStudyDesign(paper);
+    const cebm     = getCEBMTier(design.name);
     const ft       = getFullTextInfo(paper);
     const warnInfo = getManualVerificationWarnings(paper, val, rel);
 
     const card = document.createElement('div');
-    card.className = 'paper-card';
+    card.className = 'paper-card' + (isExcluded ? ' is-excluded' : '');
+    card.id = `paper-card-${i}`;
     card.innerHTML = `
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:0">
@@ -3252,6 +3748,8 @@ function renderPaperCards(){
             ${getSourceBadgeHTML(paper)}
             ${getValBadgeHTML(val)}
             <span class="design-badge ${design.class}" title="Study Type / Design">${design.icon} Type: ${design.name}</span>
+            <span class="badge" style="background:${cebm.bg};color:${cebm.color};border:1px solid ${cebm.border};font-size:.72rem;font-weight:600" title="${esc(cebm.title)}: ${esc(cebm.desc)}">🏆 ${cebm.tier}</span>
+            ${isExcluded ? '<span class="badge" style="background:#fee2e2;color:#b91c1c;font-weight:700;font-size:.72rem">⭕ Excluded from Draft</span>' : '<span class="badge" style="background:#ecfdf5;color:#047857;font-weight:700;font-size:.72rem">✅ Included in Draft</span>'}
             ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
           </div>
           <div class="r-title">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${esc(paper.title)} <span style="font-size:.78rem;opacity:.7">↗</span></a>` : esc(paper.title)}</div>
@@ -3259,6 +3757,7 @@ function renderPaperCards(){
             <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(15,107,107,0.08);border:1px solid rgba(15,107,107,0.22);padding:2px 8px;border-radius:4px;font-size:.76rem;margin-bottom:4px">
               <span style="color:#0a4545;font-weight:600">📋 Paper Type:</span>
               <strong style="color:var(--accent)">${design.icon} ${esc(design.name)}</strong>
+              <span style="color:${cebm.color};font-weight:600;margin-left:4px">(${cebm.tier})</span>
             </div><br>
             ${esc(auth)} · ${paper.year}${paper.journal?' · <em>'+esc(paper.journal)+'</em>':''}
             ${paper.doi?'<br><span style="font-family:monospace;font-size:.76rem;color:#94a3b8">DOI: '+esc(paper.doi)+'</span>':''}
@@ -3272,11 +3771,22 @@ function renderPaperCards(){
           </div>
         </div>
         <!-- Heuristic Relevance score & Actions -->
-        <div style="text-align:center;flex-shrink:0;min-width:105px;display:flex;flex-direction:column;align-items:center">
+        <div style="text-align:center;flex-shrink:0;min-width:125px;display:flex;flex-direction:column;align-items:center;gap:6px">
           <div style="font-size:1.7rem;font-weight:700;color:${relColor};line-height:1">${rel}%</div>
           <div style="font-size:.72rem;color:var(--muted)">heuristic relevance</div>
-          ${link?`<a href="${esc(link)}" target="_blank" rel="noopener" style="font-size:.76rem;color:var(--accent);display:inline-block;margin-top:2px">View Source →</a>`:''}
-          <button type="button" class="btn-remove-paper" onclick="removePaper(${i})" title="Remove paper #${i+1} from literature draft">
+          ${link?`<a href="${esc(link)}" target="_blank" rel="noopener" style="font-size:.76rem;color:var(--accent);display:inline-block">View Source →</a>`:''}
+          
+          <!-- Include / Exclude Toggle Button -->
+          <button type="button" class="btn-toggle-inc ${isExcluded ? 'inc-excluded' : 'inc-active'}" onclick="togglePaperInclusion(${i})" title="${isExcluded ? 'Click to Include paper in literature draft' : 'Click to Exclude paper from literature draft'}">
+            <span>${isExcluded ? '⭕ Excluded' : '✅ Included'}</span>
+          </button>
+
+          <!-- Full Evaluation Modal Button -->
+          <button type="button" class="btn-eval-paper" onclick="openPaperEvaluationModal(${i})" title="Open Full Evidence & Quality Evaluation Modal">
+            <span>🔬</span> Full Evaluation
+          </button>
+
+          <button type="button" class="btn-remove-paper" onclick="removePaper(${i})" title="Remove paper #${i+1} from literature pool">
             <span>🗑️</span> Remove
           </button>
         </div>
@@ -3345,6 +3855,263 @@ function renderPaperCards(){
     `;
     container.appendChild(card);
   });
+
+  if(displayedCount === 0 && p.length > 0){
+    container.innerHTML = `<div class="advisory" style="padding:22px;text-align:center">No papers match the <strong>${activeFilter}</strong> filter.<br><button type="button" class="secondary" onclick="setStep3Filter('all')" style="margin-top:10px;font-size:.82rem">Show All (${p.length}) Papers</button></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EVIDENCE CURATION: INCLUDE / EXCLUDE CONTROLS & FILTERING
+// ═══════════════════════════════════════════════════════════════
+function togglePaperInclusion(index){
+  if(index < 0 || !STATE.papers || index >= STATE.papers.length) return;
+  STATE.papers[index].excluded = !STATE.papers[index].excluded;
+  renderPaperCards();
+}
+
+function bulkSetInclusion(included){
+  if(!STATE.papers) return;
+  STATE.papers.forEach(p => p.excluded = !included);
+  renderPaperCards();
+}
+
+function excludeLowRelevance(threshold = 50){
+  if(!STATE.papers) return;
+  STATE.papers.forEach((p, idx) => {
+    const rel = (STATE.relevance && STATE.relevance[idx] !== undefined) ? STATE.relevance[idx] : 0;
+    if(rel < threshold) p.excluded = true;
+  });
+  renderPaperCards();
+}
+
+function setStep3Filter(filter, el){
+  STATE.step3Filter = filter || 'all';
+  ['all', 'included', 'excluded'].forEach(f => {
+    const chip = document.getElementById(`filter-chip-${f}`);
+    if(chip) chip.classList.toggle('active', f === STATE.step3Filter);
+  });
+  renderPaperCards();
+}
+
+function getCEBMTier(designName){
+  const d = (designName || '').toLowerCase();
+  if(/\b(systematic review|meta-analysis|meta-analytic|umbrella review|guideline|cpg)\b/.test(d)){
+    return {
+      tier: 'Level 1',
+      title: 'Level 1 · Highest Evidentiary Hierarchy',
+      desc: 'Systematic reviews, meta-analyses, and clinical practice guidelines synthesizing multiple randomized trials with low risk of bias.',
+      color: '#047857',
+      bg: '#ecfdf5',
+      border: '#a7f3d0'
+    };
+  }
+  if(/\b(randomized|rct|controlled trial|clinical trial)\b/.test(d)){
+    return {
+      tier: 'Level 2',
+      title: 'Level 2 · High Evidentiary Hierarchy',
+      desc: 'Individual randomized controlled trials with robust blinding, allocation concealment, and prospective experimental control.',
+      color: '#0d9488',
+      bg: '#f0fdfa',
+      border: '#99f6e4'
+    };
+  }
+  if(/\b(cohort|prospective|retrospective|case-control|comparative|observational)\b/.test(d)){
+    return {
+      tier: 'Level 3',
+      title: 'Level 3 · Moderate Evidentiary Hierarchy',
+      desc: 'Controlled cohort or case-control observational studies investigating outcomes over longitudinal follow-up.',
+      color: '#2563eb',
+      bg: '#eff6ff',
+      border: '#bfdbfe'
+    };
+  }
+  if(/\b(cross-sectional|case series|case report|survey)\b/.test(d)){
+    return {
+      tier: 'Level 4',
+      title: 'Level 4 · Descriptive Evidentiary Hierarchy',
+      desc: 'Descriptive case series, cross-sectional analyses, or post-market surveillance without contemporaneous controls.',
+      color: '#d97706',
+      bg: '#fffbeb',
+      border: '#fde68a'
+    };
+  }
+  return {
+    tier: 'Level 5',
+    title: 'Level 5 · Foundational & Scoping Evidence',
+    desc: 'Narrative reviews, preclinical or laboratory models, study protocols, and consensus expert opinions.',
+    color: '#64748b',
+    bg: '#f8fafc',
+    border: '#cbd5e1'
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FULL EVALUATION MODAL (COMPREHENSIVE MULTI-TIER ANALYSIS)
+// ═══════════════════════════════════════════════════════════════
+function openPaperEvaluationModal(index){
+  if(index < 0 || !STATE.papers || index >= STATE.papers.length) return;
+  const p = STATE.papers[index];
+  const v = (STATE.validations && STATE.validations[index]) || {};
+  const r = (STATE.relevance && STATE.relevance[index]) !== undefined ? STATE.relevance[index] : 0;
+  const rd = (STATE.relevanceDetails && STATE.relevanceDetails[index]) || scoreHeuristicRelevance(p, STATE.topic);
+  const design = classifyStudyDesign(p);
+  const cebm = getCEBMTier(design.name);
+  const ft = getFullTextInfo(p);
+  const isExcluded = Boolean(p.excluded);
+
+  // Citation previews
+  const vancRef = formatVancouver(p, 1, { htmlLinks: true });
+  const apaRef = formatAPA(p);
+  const harvRef = formatHarvard(p);
+
+  // Extracted finding
+  let finding = '';
+  try {
+    const gen = new PaperGenerator(STATE.topic, [p]);
+    finding = gen.extractFinding(p.abstract, STATE.topic) || 'Clinical endpoints described in published record.';
+  } catch(e){
+    finding = p.title;
+  }
+
+  const modalBackdrop = document.getElementById('eval-modal-backdrop');
+  const modalTitle = document.getElementById('eval-modal-title');
+  const modalBody = document.getElementById('eval-modal-body');
+
+  if(modalTitle){
+    modalTitle.innerHTML = `🔬 Comprehensive Evidence & Quality Evaluation — Paper #${index + 1}`;
+  }
+
+  if(modalBody){
+    modalBody.innerHTML = `
+      <!-- Paper Header Overview -->
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="background:var(--accent);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700">${index+1}</span>
+            ${getSourceBadgeHTML(p)}
+            ${getValBadgeHTML(v)}
+            <span class="design-badge ${design.class}">${design.icon} ${esc(design.name)}</span>
+          </div>
+          <div>
+            <button type="button" class="btn-toggle-inc ${isExcluded ? 'inc-excluded' : 'inc-active'}" onclick="togglePaperInclusion(${index}); openPaperEvaluationModal(${index})" style="font-size:.85rem;padding:6px 14px">
+              <span>${isExcluded ? '⭕ Excluded from Synthesis Draft' : '✅ Included in Synthesis Draft'}</span>
+              <span style="font-size:.75rem;opacity:.8">(Click to Toggle)</span>
+            </button>
+          </div>
+        </div>
+        <h4 style="margin:0 0 6px 0;font-size:1.05rem;line-height:1.4;color:var(--ink)">${esc(p.title)}</h4>
+        <div style="font-size:.82rem;color:var(--muted)">
+          ${esc(p.authors || 'Unknown Authors')} · ${p.year}${p.journal ? ` · <em>${esc(p.journal)}</em>` : ''}
+        </div>
+      </div>
+
+      <!-- CEBM Evidence Tier & Quality Grid -->
+      <div class="eval-section" style="border-left:4px solid ${cebm.color};background:${cebm.bg}">
+        <div class="eval-section-title" style="color:${cebm.color}">
+          <span>🏆</span>
+          <span>${esc(cebm.title)}</span>
+        </div>
+        <div style="font-size:.84rem;color:#334155;line-height:1.5">
+          ${esc(cebm.desc)}
+        </div>
+      </div>
+
+      <!-- Quantitative Evaluation Metrics -->
+      <div class="eval-section">
+        <div class="eval-section-title">📊 Evidence & Heuristic Relevance Breakdown</div>
+        <div class="eval-grid">
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:1.5rem;font-weight:700;color:var(--accent)">${r}%</div>
+            <div style="font-size:.74rem;color:var(--muted)">Overall Relevance</div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:1.3rem;font-weight:700;color:var(--ink)">${rd.titleMatch || 0}%</div>
+            <div style="font-size:.74rem;color:var(--muted)">Title Keyword Match</div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:1.3rem;font-weight:700;color:var(--ink)">${rd.absMatch || 0}%</div>
+            <div style="font-size:.74rem;color:var(--muted)">Abstract Match</div>
+          </div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center">
+            <div style="font-size:1.3rem;font-weight:700;color:var(--ink)">${rd.recency || 0}%</div>
+            <div style="font-size:.74rem;color:var(--muted)">Publication Recency</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+          ${(rd.explanations || []).map(exp => `<span class="badge" style="background:#e2e8f0;color:#334155;font-size:.75rem">💡 ${esc(exp)}</span>`).join('')}
+        </div>
+      </div>
+
+      <!-- Clinical Finding Extraction -->
+      <div class="eval-section">
+        <div class="eval-section-title">🩺 Extracted Primary Clinical Dimension / Finding</div>
+        <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px;font-size:.85rem;color:#1e293b;line-height:1.5">
+          <strong>Synthesized Core Finding:</strong> ${esc(finding)}
+        </div>
+      </div>
+
+      <!-- Persistent Identifiers & Open Access Verification -->
+      <div class="eval-section">
+        <div class="eval-section-title">🔗 Persistent Identifiers & Registry Verification</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:8px;font-size:.82rem">
+          <div>
+            <strong>DOI:</strong> ${p.doi ? `<a href="https://doi.org/${esc(p.doi)}" target="_blank" rel="noopener" style="color:var(--accent);font-family:monospace">${esc(p.doi)} ↗</a>` : '<span style="color:var(--muted)">Not Available</span>'}
+          </div>
+          <div>
+            <strong>PubMed ID:</strong> ${p.pmid ? `<a href="https://pubmed.ncbi.nlm.nih.gov/${esc(p.pmid)}/" target="_blank" rel="noopener" style="color:var(--accent);font-family:monospace">PMID:${esc(p.pmid)} ↗</a>` : '<span style="color:var(--muted)">Not Indexed</span>'}
+          </div>
+          <div>
+            <strong>PubMed Central:</strong> ${p.pmcid ? `<a href="https://www.ncbi.nlm.nih.gov/pmc/articles/${esc(p.pmcid)}/" target="_blank" rel="noopener" style="color:var(--accent);font-family:monospace">${esc(p.pmcid)} ↗</a>` : '<span style="color:var(--muted)">None</span>'}
+          </div>
+          <div>
+            <strong>Full-Text Access:</strong> ${ft.url ? `<a href="${esc(ft.url)}" target="_blank" rel="noopener" class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label} ↗</a>` : `<span class="ft-badge ${ft.badgeClass}">${ft.icon} ${ft.label}</span>`}
+          </div>
+          <div>
+            <strong>Citation Count:</strong> ${p.citedBy ? `🔖 ${p.citedBy} peer-reviewed citations` : '<span style="color:var(--muted)">Unspecified</span>'}
+          </div>
+          <div>
+            <strong>Validation Status:</strong> ${v.valid ? '<span style="color:var(--good);font-weight:700">✔ Verified Record</span>' : '<span style="color:var(--warn);font-weight:700">⚠️ Needs Manual Verification</span>'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Style Citation Previews -->
+      <div class="eval-section">
+        <div class="eval-section-title">📚 Multi-Style Formatted Citation Previews</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:.82rem">
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+            <span style="font-weight:700;color:var(--accent)">Vancouver (ICMJE):</span><br>
+            <span style="color:#334155">${vancRef}</span>
+          </div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+            <span style="font-weight:700;color:#1e40af">APA (7th Edition):</span><br>
+            <span style="color:#334155">${esc(apaRef)}</span>
+          </div>
+          <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+            <span style="font-weight:700;color:#6d28d9">Harvard (Author-Year):</span><br>
+            <span style="color:#334155">${esc(harvRef)}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Abstract Text -->
+      <div class="eval-section" style="margin-bottom:0">
+        <div class="eval-section-title">📄 Original Abstract</div>
+        <div style="font-size:.82rem;color:#334155;line-height:1.6;max-height:220px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px">
+          ${p.abstract ? esc(p.abstract) : '<em>No abstract available for this record.</em>'}
+        </div>
+      </div>
+    `;
+  }
+
+  if(modalBackdrop) modalBackdrop.classList.remove('hidden');
+}
+
+function closeEvaluationModal(e){
+  if(e && e.target && e.target.closest && e.target.closest('.eval-modal-content')) return;
+  const modalBackdrop = document.getElementById('eval-modal-backdrop');
+  if(modalBackdrop) modalBackdrop.classList.add('hidden');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4499,7 +5266,8 @@ function setCitationStyle(style){
   }
 
   if(STATE.paper){
-    STATE.paper.references = formatPaperReferences(STATE.papers, style);
+    const activePapers = STATE.activePapers || STATE.papers;
+    STATE.paper.references = formatPaperReferences(activePapers, style);
     renderPaperPreview(STATE.paper);
     renderReferencesTab(STATE.paper);
   }
@@ -4511,6 +5279,7 @@ function setCitationStyle(style){
 function renderPaperPreview(paper){
   const abs = paper.abstractObj;
   const style = STATE.citationStyle || 'vancouver';
+  const activePapers = STATE.activePapers || STATE.papers;
 
   const citify = t => {
     let raw = String(t || '');
@@ -4519,14 +5288,14 @@ function renderPaperPreview(paper){
     }
     let formatted = raw.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
       const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
-      const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
+      const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < activePapers.length);
       const firstNum = parts[0] || '1';
 
       if (style === 'apa') {
-        const apaText = formatInTextCitation(zeroBased, 'apa');
+        const apaText = formatInTextCitation(zeroBased, 'apa', activePapers);
         return `<span class="cite-author-date" style="font-weight:600;color:var(--accent);cursor:pointer" title="APA Citation · Click to jump" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${esc(apaText)}</span>`;
       } else if (style === 'harvard') {
-        const harvardText = formatInTextCitation(zeroBased, 'harvard');
+        const harvardText = formatInTextCitation(zeroBased, 'harvard', activePapers);
         return `<span class="cite-author-date" style="font-weight:600;color:var(--accent);cursor:pointer" title="Harvard Citation · Click to jump" onclick="document.getElementById('ref-anchor-${firstNum}')?.scrollIntoView({behavior:'smooth'})">${esc(harvardText)}</span>`;
       } else {
         // Vancouver: Uppercase / superscript with NO brackets
@@ -4775,21 +5544,24 @@ function renderReviewTab(audit){
 // GO TO STEP 4
 // ═══════════════════════════════════════════════════════════════
 function goToStep4(){
-  if (!STATE.papers || STATE.papers.length === 0) {
-    alert('At least one paper is required to generate the review draft. Please restore a paper or perform a new search.');
+  const activePapers = (STATE.papers || []).filter(p => !p.excluded);
+  if (!activePapers || activePapers.length === 0) {
+    alert('At least one included paper is required to generate the review draft. Please include at least one paper in Step 3.');
     return;
   }
   const s4Alert = document.getElementById('step4-alert');
   if(s4Alert) s4Alert.classList.add('hidden');
   setStep(4);
   showSection('step-4');
-  // Generate paper
-  const gen = new PaperGenerator(STATE.topic, STATE.papers);
+
+  STATE.activePapers = activePapers;
+  // Generate paper using included active papers
+  const gen = new PaperGenerator(STATE.topic, activePapers);
   STATE.paper = gen.generate();
   document.getElementById('draft-title-label').textContent = STATE.paper.title.substring(0,70)+(STATE.paper.title.length>70?'…':'');
   
   // Independent Paper Review & Quality Audit Engine
-  const auditResult = PaperReviewEngine.audit(STATE.paper, STATE.papers, STATE.topic);
+  const auditResult = PaperReviewEngine.audit(STATE.paper, activePapers, STATE.topic);
   STATE.auditResult = auditResult;
   renderReviewTab(auditResult);
 
@@ -4816,6 +5588,7 @@ async function exportPaperWord(){
     } = docxLib;
 
     const paper = STATE.paper;
+    const activePapers = STATE.activePapers || STATE.papers;
     const abs = paper.abstractObj;
     const style = STATE.citationStyle || 'vancouver';
     const styleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE Pure Superscript)';
@@ -4823,7 +5596,7 @@ async function exportPaperWord(){
     const srcLabel = STATE.searchSource === 's2' ? 'Semantic Scholar' : STATE.searchSource === 'both' ? 'Europe PMC & Semantic Scholar' : 'Europe PMC';
 
     const createParagraphRuns = (text) => {
-      const tokens = parseParagraphTokens(text, style, STATE.papers);
+      const tokens = parseParagraphTokens(text, style, activePapers);
       return tokens.map(tok => {
         if(tok.type === 'citation'){
           if(style === 'vancouver'){
@@ -4919,7 +5692,7 @@ async function exportPaperWord(){
                   spacing: { after: 0 },
                   children: [
                     new TextRun({
-                      text: `100% Bibliographic Parity (${STATE.papers.length} claimed ≡ ${STATE.papers.length} citations ≡ ${STATE.papers.length} references) · Zero Editorial Notices/Retractions · Multi-Registry DOI Validation · Strict IMRaD Architecture`,
+                      text: `100% Bibliographic Parity (${activePapers.length} claimed ≡ ${activePapers.length} citations ≡ ${activePapers.length} references) · Zero Editorial Notices/Retractions · Multi-Registry DOI Validation · Strict IMRaD Architecture`,
                       font: "Arial",
                       size: 17,
                       color: "334155"
@@ -5000,7 +5773,7 @@ async function exportPaperWord(){
       heading: HeadingLevel.HEADING_2,
       spacing: { before: 200, after: 100 },
       children: [
-        new TextRun({ text: `Table 1: Evidence Synthesis Matrix (${STATE.papers.length} Included Investigations)`, font: "Arial", size: 24, bold: true, color: "0D9488" })
+        new TextRun({ text: `Table 1: Evidence Synthesis Matrix (${activePapers.length} Included Investigations)`, font: "Arial", size: 24, bold: true, color: "0D9488" })
       ]
     }));
 
@@ -5035,8 +5808,8 @@ async function exportPaperWord(){
       ]
     }));
 
-    const gen = new PaperGenerator(STATE.topic, STATE.papers);
-    STATE.papers.forEach((p, idx) => {
+    const gen = new PaperGenerator(STATE.topic, activePapers);
+    activePapers.forEach((p, idx) => {
       const parsed = parseAuthorsList(p.authors);
       const authStr = `${parsed[0]?.surname || 'Author'} (${p.year || 'n.d.'})`;
       const design = classifyStudyDesign(p);
@@ -5137,12 +5910,13 @@ async function exportPaperWord(){
     }));
 
     paper.references.forEach((r) => {
+      const isNum = style === 'vancouver';
       docChildren.push(new Paragraph({
         indent: { left: 720, hanging: 720 },
         spacing: { before: 40, after: 100, line: 240, lineRule: "auto" },
         children: [
-          new TextRun({ text: `${r.num}. `, bold: true, font: "Arial", size: 19, color: "0D9488" }),
-          new TextRun({ text: r.text.replace(/^\d+\.\s*/, ''), font: "Arial", size: 19, color: "334155" })
+          ...(isNum ? [new TextRun({ text: `${r.num}. `, bold: true, font: "Arial", size: 19, color: "0D9488" })] : []),
+          new TextRun({ text: isNum ? r.text.replace(/^\d+\.\s*/, '') : r.text, font: "Arial", size: 19, color: "334155" })
         ]
       }));
     });
@@ -5310,6 +6084,7 @@ async function exportPaperPDF(){
     };
 
     const paper = STATE.paper, abs = paper.abstractObj;
+    const activePapers = STATE.activePapers || STATE.papers;
     const style = STATE.citationStyle || 'vancouver';
     const citeStyleLabel = style === 'apa' ? 'APA (7th Edition)' : style === 'harvard' ? 'Harvard' : 'Vancouver (ICMJE Pure Superscript)';
     const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -5377,8 +6152,8 @@ async function exportPaperPDF(){
       if (style === 'apa' || style === 'harvard') {
         formatted = txt.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
           const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
-          const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
-          return formatInTextCitation(zeroBased, style);
+          const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < activePapers.length);
+          return formatInTextCitation(zeroBased, style, activePapers);
         });
       } else {
         formatted = repositionVancouverCitations(txt).replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
@@ -5430,8 +6205,8 @@ async function exportPaperPDF(){
       if (style === 'apa' || style === 'harvard') {
         renderedText = cleanPara.replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
           const parts = n.split(',').map(s => parseInt(s.trim(), 10)).filter(num => !isNaN(num));
-          const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < STATE.papers.length);
-          return formatInTextCitation(zeroBased, style);
+          const zeroBased = parts.map(num => num - 1).filter(idx => idx >= 0 && idx < activePapers.length);
+          return formatInTextCitation(zeroBased, style, activePapers);
         });
       } else {
         renderedText = repositionVancouverCitations(cleanPara).replace(/\[(\d+(?:,\s*\d+)*)\]/g, (_, n) => {
